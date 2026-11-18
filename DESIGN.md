@@ -81,8 +81,7 @@ Gameplay **unverändert** übernehmen.
 - Tippen = Schuss mit einem **Dorn** an diese Stelle. Treffer auf Neuner = aufgespießt.
 - Magazin: 8 Dornen. **Nachladen = „Mischen“**: Nach-unten-Wischen oder Tipp auf das Dornen-Symbol.
 - Andere Karte getroffen = Punktabzug, Dulle = großer Abzug.
-- Runde 90 s. Selten fliegt die Kreuz-Dame („Die Alte“) mit, oft dicht bei einem Neuner.
-  Sie darf **nicht** getroffen werden: großer Abzug, größer als bei der Dulle („Die Alten schießt man nicht ab.“).
+- Runde 90 s. Kein Sonderziel: Die Kreuz-Dame ist eine normale Karte.
 
 ### 5. Kartenhaus (Mechanik à la Angry Birds, vereinfacht)
 - Seitenansicht. Links eine **Astgabel aus dem Dornbusch** als Schleuder.
