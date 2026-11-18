@@ -8,7 +8,7 @@ export default [
 
   // 'flatterflug',
 
-  // 'neuner-hauen',
+  'neuner-hauen',
 
   // 'neunerschiessen',
 
