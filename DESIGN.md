@@ -96,7 +96,8 @@ Gameplay **unverändert** übernehmen.
 ### 6. Oberwelt (Hub)
 - 2D-Draufsicht auf ein kleines **Stammtischdorf**. Der Neuntöter (Sprite von oben oder schräg)
   läuft/hüpft dorthin, wo man hintippt (einfache Wegfindung oder direkte Bewegung mit Kollision).
-- Stationen (betreten = Spiel starten, mit kurzem Schild davor):
+- Stationen (Holzschild mit Spielname, Bestleistung und Titel; Eingang betreten oder Station
+  antippen = Eingangskarte mit Bestleistung und Knopf „Spielen“, kein automatischer Start):
   - Dornbusch → Neunerjagd
   - Windwiese → Flatterflug
   - Wirtshaus „Zum Stammtisch“ → Neuner hauen
@@ -105,6 +106,9 @@ Gameplay **unverändert** übernehmen.
   - Vereinsheim → Bestenliste (lokale Bestleistungen aller Spiele, mit Titeln)
 - Zurück aus jedem Spiel in die Oberwelt (Button), der Vogel steht dann vor der Station.
 - Welt etwas größer als der Bildschirm, Kamera folgt dem Vogel.
+- Schräge Draufsicht (Boden von oben, Bauten von vorn), Vogel = bestehender Sprite, hüpfend.
+  Ortsschild „Der Stammtisch n.e.v.“ am Dorfeingang. Dunkelmodus = Abend mit Fensterlicht.
+- Liste aller Spiele bleibt unter `#/liste` erreichbar (Link „Liste“ oben rechts).
 
 ## Bestleistungen
 

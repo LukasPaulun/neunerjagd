@@ -4,11 +4,21 @@ export const css = n => getComputedStyle(document.documentElement).getPropertyVa
 
 export const C = {};
 
+/* Dunkelmodus aktiv? data-theme="dark" erzwingt ihn, data-theme="light" schaltet ihn ab,
+   sonst gilt die Systemeinstellung (wie im CSS von index.html). */
+function isDark() {
+  const t = document.documentElement.dataset.theme;
+  if (t === 'dark') return true;
+  if (t === 'light') return false;
+  try { return matchMedia('(prefers-color-scheme: dark)').matches; } catch (e) { return false; }
+}
+
 export function refreshColors() {
   Object.assign(C, {
     bg: css('--surface'), paper: css('--paper'), ink: css('--ink'), muted: css('--muted'), line: css('--line'),
     thorn: css('--thorn'), ok: css('--ok'), bad: css('--bad'), gold: css('--gold'), ch: css('--chestnut'),
     veil: css('--veil'),
+    dark: isDark(),
   });
 }
 

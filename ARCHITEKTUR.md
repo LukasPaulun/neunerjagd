@@ -18,11 +18,14 @@ core/hud.js           hud, hudBar, hudLabel, hudValue, hudHearts, createPopups
 core/util.js          clamp, lerp, rand, randInt, pick, dist, vibrate
 core/store.js         Bestleistungen und Spielstände (localStorage)
 core/router.js        Hash-Routing
-core/menu.js          Menü (Welle 1). Wird in Welle 3 durch die Oberwelt ersetzt
+core/oberwelt.js      Hub: Oberwelt „Stammtischdorf“ (Bewegung, Wegfindung, Kamera, Eingangskarte, Bestenliste)
+core/oberwelt-welt.js Oberwelt: Stationstabelle STATIONEN, Wege, Bäume, Zäune, Bauten (Zeichnen)
+core/menu.js          Listen-Menü unter #/liste (Rückfall für Fehlersuche und Barrierefreiheit)
 games/registry.js     Liste der Spiel-ids (einzige gemeinsam bearbeitete Datei)
 games/neunerjagd.js   Neunerjagd
 games/_vorlage.js     Kommentiertes Minimalspiel zum Kopieren (nicht im Menü)
 tests/smoke.py        Rauchtest (Playwright)
+tests/oberwelt.py     Ablauftest der Oberwelt (Playwright)
 KERN-WUENSCHE.md      Änderungswünsche an core/ von parallelen Agenten
 ```
 
@@ -32,7 +35,7 @@ und relativ importieren.
 
 ## Routing
 
-- `#/` (oder leer/unbekannt) → Hub (Menü). `#/spiel/<id>` → Spiel.
+- `#/` (oder leer/unbekannt) → Hub (Oberwelt). `#/liste` → Listen-Menü. `#/spiel/<id>` → Spiel.
 - Die id muss `[_a-z0-9-]+` sein. Ein Spiel, das (noch) nicht in der Registry steht, ist trotzdem
   über `#/spiel/<id>` erreichbar (wird per `import('../games/<id>.js')` geladen). So läuft die
   Vorlage (`#/spiel/_vorlage`) und so kann man ein neues Spiel vor dem Eintragen testen.
@@ -40,7 +43,8 @@ und relativ importieren.
   (`file://` geht nicht, ES-Module brauchen HTTP.)
 - „Zurück“ (Kopfzeile, `‹ Stammtisch`) führt nach `#/`. Die Engine merkt sich das zuletzt
   geöffnete Spiel (`stammtisch-zuletzt`); der Hub bekommt es als `from` (Menü hebt es hervor,
-  die Oberwelt stellt den Vogel vor diese Station).
+  die Oberwelt hebt das Schild hervor). Kommt man direkt aus einem Spiel (`fromGame`), stellt die
+  Oberwelt den Vogel vor diese Station, sonst an die gespeicherte Position.
 
 ## Koordinaten
 
@@ -163,7 +167,8 @@ Elemente). Alles läuft über Canvas, `onPointer` und `api`. Timer nur über `st
 ### Farben `C`
 
 `C.bg` (Fläche, `--surface`), `C.paper`, `C.ink`, `C.muted`, `C.line`, `C.thorn`, `C.ok`,
-`C.bad`, `C.gold`, `C.ch` (Kastanie, `--chestnut`), `C.veil`. Immer `C.x` zum Zeitpunkt des
+`C.bad`, `C.gold`, `C.ch` (Kastanie, `--chestnut`), `C.veil`, `C.dark` (`true` im Dunkelmodus,
+z. B. um Festfarben wie Holz abzudunkeln). Immer `C.x` zum Zeitpunkt des
 Zeichnens lesen (nicht in einer Konstante zwischenspeichern), dann wirkt der Dunkelmodus sofort.
 Karten, Vogel und Holz (`WOOD = '#5a3b26'`) haben feste Farben.
 
@@ -240,6 +245,7 @@ Tastatur wird nicht unterstützt.
   - `neunerjagd-best` → Zahl (Altschlüssel, wird für die Neunerjagd weiter gelesen und geschrieben)
   - `stammtisch-<id>-<key>` → frei pro Spiel (`api.save/load`)
   - `stammtisch-zuletzt` → id des zuletzt geöffneten Spiels
+  - `stammtisch-oberwelt-pos` → `{x, y}` Vogelposition in der Oberwelt, `stammtisch-oberwelt-hinweis` → Hinweis gesehen
 - `core/store.js`: `getBest(id)`, `setBest(id, score, title)` (nur wenn höher, → true),
   `load(id, key, fallback)`, `save(id, key, value)`, `getLast()`, `setLast(id)`. Spiele nutzen
   stattdessen `api.best/load/save`.
@@ -263,21 +269,59 @@ Tastatur wird nicht unterstützt.
 Die Registry enthält nur ids; die Module werden einzeln dynamisch geladen. Ein Spiel mit
 Fehler beim Laden fehlt dann im Menü, die anderen laufen weiter (Fehler in der Konsole).
 
-## Hub (Menü / Oberwelt)
+4. In der Oberwelt eine Station eintragen (siehe unten). Ohne Eintrag fehlt das Spiel nur im
+   Dorf; in `#/liste` und in der Bestenliste steht es trotzdem.
 
-`core/main.js` importiert den Hub in genau einer Zeile (`import hubModule from './menu.js'`).
-Vertrag: `hubModule.mount(hub)` → `{ draw(ctx), onPointer(ev), unmount() }` mit
-`hub = { el, games, from, open(id), ctx, C, VW, VH, loop(fn) }`:
+## Hub (Oberwelt / Liste)
+
+`core/main.js` wählt den Hub nach der Route: `#/` → `core/oberwelt.js`, `#/liste` → `core/menu.js`.
+Vertrag: `hubModule.mount(hub)` → `{ draw(ctx), onPointer(ev), unmount(), debug? }` mit
+`hub = { el, games, from, fromGame, open(id), ctx, C, VW, VH, loop(fn) }`:
 `el` leerer DOM-Container über dem Canvas, `games = [{id, name, station, best: {score, title}}]`
-in Registry-Reihenfolge, `from` = zuletzt gespieltes Spiel, `open(id)` startet ein Spiel,
-`loop(fn(dt))` startet eine Animationsschleife (zeichnet nach jedem `fn`), gibt `stop()` zurück.
+in Registry-Reihenfolge, `from` = zuletzt gespieltes Spiel, `fromGame` = true, wenn der vorige
+Bildschirm ein Spiel war, `open(id)` startet ein Spiel, `loop(fn(dt))` startet eine
+Animationsschleife (zeichnet nach jedem `fn`), gibt `stop()` zurück.
+
+### Oberwelt „Stammtischdorf“
+
+- Welt `WW × WH` = 600 × 1260 (eigene Koordinaten), Kamera-Ausschnitt 360 × 640, folgt dem Vogel
+  weich und bleibt in den Weltgrenzen. Schräge Draufsicht: Boden von oben, Bauten von vorn;
+  Bauten, Bäume, Zäune, Vogel werden nach ihrer Fußlinie (y) sortiert gezeichnet, nur Sichtbares.
+- Steuerung: Tippen = Vogel hüpft hin (Raster-A* mit 15er-Zellen, danach Sichtlinien-Glättung).
+  Halten und Ziehen: Ziel folgt dem Finger. Tipp auf Bau oder Schild = hinlaufen, dann
+  Eingangskarte. Betritt der Vogel den Eingangsbereich (Radius 20 vor der Tür) und bleibt stehen,
+  erscheint die Karte ebenfalls. „Spielen“ öffnet `#/spiel/<id>`; nie automatischer Start.
+- Vereinsheim (fest, kein Spiel): Karte „Eintreten“ → Bestenliste aller Registry-Spiele.
+- Dunkelmodus (`C.dark`): Boden in dunklen Farben, Abendschleier über den Bauten, danach
+  Fensterlichter, Laternen und Schilder.
+- Test-Hook: `window.__stammtisch.hub` (`stations`, `bird`, `prompt`, `panel`, `door(id)`,
+  `screenPoint(id)`, `toScreen(x, y)`), `window.__stammtisch.hubName` (`'oberwelt'|'liste'`).
+
+### Station eintragen
+
+In `core/oberwelt-welt.js` eine Zeile in `STATIONEN` ergänzen:
+
+```js
+'mein-spiel': { x: 120, y: 560, bau: 'huette' },
+```
+
+`x/y` = Mitte der Unterkante des Baus (Bodenlinie). `bau` = Bauart aus `BAUTEN`
+(`dornbusch`, `windwiese`, `wirtshaus`, `schiessbude`, `kartenbaustelle`, `vereinsheim`,
+`huette` als schlichter Ersatz). Eine eigene Bauart ist ein Eintrag in `BAUTEN` mit
+`hw` (halbe Breite), `d` (Tiefe der Kollisionsfläche), `top` (Höhe), `door` (Eingang unter der
+Bodenlinie), `sign` (Schild-Fußpunkt relativ), `fenster` (für das Abendlicht) und `draw(ctx, t)`.
+Freie Flächen gibt es noch am Rand (links unten, rechts in der Mitte); Bäume aus `BAEUME`
+notfalls verschieben. Kollisionsflächen dürfen sich nicht mit Nachbarn überlappen. Der Weg dorthin ist optional (Wegfindung braucht ihn
+nicht), sieht aber besser aus: Polylinie in `WEGE`. Danach `python3 tests/oberwelt.py` und die
+Bilder ansehen (Schilder dürfen sich nicht überdecken).
 
 ## Tests
 
 ```
-python3 tests/smoke.py              # Menü + alle Spiele der Registry + _vorlage
+python3 tests/smoke.py              # Hub + #/liste + alle Spiele der Registry + _vorlage
+python3 tests/oberwelt.py           # Ablauf Oberwelt (gehen, Station, Spiel, zurück, Bestenliste, dunkel)
 python3 tests/smoke.py flatterflug  # nur ein Spiel (auch wenn noch nicht in der Registry)
-python3 tests/smoke.py menu         # nur Menü
+python3 tests/smoke.py menu         # nur Hub und #/liste
 Optionen: --sichtbar  --geraet "iPhone 13"
 ```
 

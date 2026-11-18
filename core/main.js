@@ -6,7 +6,8 @@ import { mountGame, rankTitle } from './engine.js';
 import * as store from './store.js';
 import { parse, onRoute, go, validId } from './router.js';
 import REGISTRY from '../games/registry.js';
-import hubModule from './menu.js';   // Welle 3: hier die Oberwelt eintragen
+import hubModule from './oberwelt.js';   // Hub: Oberwelt (Stammtischdorf)
+import listModule from './menu.js';      // Ersatz-Hub als Liste: #/liste (Fehlersuche, Barrierefreiheit)
 
 const $ = id => document.getElementById(id);
 const sh = {
@@ -17,6 +18,7 @@ const titleEl = $('title'), eyebrow = $('eyebrow'), back = $('back'), hubEl = $(
 
 let current = null;            // aktueller Bildschirm {draw, onPointer, onButton?, onPause?, onHidden?, unmount, debug?}
 let token = 0;
+let lastKind = '';             // Art des vorigen Bildschirms ('spiel' -> Oberwelt stellt den Vogel vor die Station)
 const redraw = () => { if (current && C.bg) { resetTransform(); current.draw(sh.ctx); } };
 
 sh.ctx = initStage($('stage'), $('cv'), redraw);
@@ -53,7 +55,7 @@ function setHeader(title, inGame) {
 
 async function route(r) {
   const my = ++token;
-  if (current) { current.unmount(); current = null; }
+  if (current) { lastKind = current.kind; current.unmount(); current = null; }
   await ready;
   if (my !== token) return;
   if (r.view === 'spiel') {
@@ -65,20 +67,21 @@ async function route(r) {
     setHeader(def.name, true);
     current = mountGame(def, sh);
   } else {
-    setHeader('Der Stammtisch', false);
+    setHeader('Der Stammtisch', !!r.liste);
     sh.ov.root.hidden = true; sh.pauseB.hidden = true;
     const list = REGISTRY.map(id => games.get(id)).filter(Boolean).map(d => {
       const b = store.getBest(d.id);
       return { id: d.id, name: d.name, station: d.station, best: { score: b.score, title: b.title || rankTitle(d, b.score) } };
     });
     let raf = 0;
-    const scr = hubModule.mount({
-      el: hubEl, games: list, from: store.getLast(), ctx: sh.ctx, C, VW, VH,
+    const mod = r.liste ? listModule : hubModule;
+    const scr = mod.mount({
+      el: hubEl, games: list, from: store.getLast(), fromGame: lastKind === 'spiel', ctx: sh.ctx, C, VW, VH,
       open: id => go('#/spiel/' + id),
       /* Schleife für animierte Hubs: fn(dt) wird pro Frame aufgerufen, danach gezeichnet. */
       loop(fn) { let last = performance.now(); const f = ts => { const dt = Math.min(0.05, (ts - last) / 1000 || 0); last = ts; fn(dt); redraw(); raf = requestAnimationFrame(f); }; raf = requestAnimationFrame(f); return () => cancelAnimationFrame(raf); },
     });
-    current = { kind: 'hub', draw: c => scr.draw(c), onPointer: ev => scr.onPointer && scr.onPointer(ev), unmount: () => { cancelAnimationFrame(raf); scr.unmount(); } };
+    current = { kind: 'hub', hub: r.liste ? 'liste' : 'oberwelt', hubDebug: scr.debug || null, draw: c => scr.draw(c), onPointer: ev => scr.onPointer && scr.onPointer(ev), unmount: () => { cancelAnimationFrame(raf); scr.unmount(); } };
   }
   redraw();
 }
@@ -86,6 +89,8 @@ async function route(r) {
 /* Test-Hook (tests/smoke.py) */
 window.__stammtisch = {
   get view() { return current ? current.kind : 'laden'; },
+  get hub() { return current && current.kind === 'hub' ? current.hubDebug : null; },
+  get hubName() { return current && current.kind === 'hub' ? current.hub : null; },
   get gameId() { return current && current.def ? current.def.id : null; },
   get state() { return current && current.debug ? current.debug.state : null; },
   get frames() { return current && current.debug ? current.debug.frames : 0; },

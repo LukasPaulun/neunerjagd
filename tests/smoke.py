@@ -4,7 +4,7 @@
 Aufruf:
   python3 tests/smoke.py              # Menü + alle Spiele aus games/registry.js + _vorlage
   python3 tests/smoke.py <id> [<id>]  # nur diese Spiele (z. B. flatterflug), Menü wird übersprungen
-  python3 tests/smoke.py menu         # nur das Menü
+  python3 tests/smoke.py menu         # nur Hub (Oberwelt) und Listen-Menü #/liste
 Optionen: --sichtbar (Browser mit Fenster), --geraet "iPhone 13"
 
 Pro Spiel: Seite #/spiel/<id> öffnen, Start tippen, einige Sekunden Gesten (laut
@@ -102,16 +102,27 @@ def gestures(run, test):
 
 
 def test_menu(run, base):
+    """Hub (#/, Oberwelt) und Listen-Menü (#/liste): alle Spiele der Registry erreichbar."""
     run.page.goto(base + '#/')
     run.page.wait_for_function("window.__stammtisch && window.__stammtisch.view === 'hub'")
     run.page.evaluate("window.__stammtisch.ready")
     reg = run.js('window.__stammtisch.registry')
-    run.page.wait_for_timeout(400)
+    run.page.wait_for_timeout(600)
+    # Oberwelt: Stationen aus dem Test-Hook; ein Spiel ohne Station ist erlaubt (nur Hinweis)
+    shown = run.js("(window.__stammtisch.hub && window.__stammtisch.hub.stations) || [...document.querySelectorAll('.menu-item')].map(a => a.dataset.id)")
+    nost = [i for i in reg if i not in shown]
+    if nost:
+        run.notes.append(f'ohne Station im Hub: {nost}')
+    run.shot('1-menue')
+    # Listen-Menü: muss alle Spiele zeigen
+    run.page.goto(base + '#/liste')
+    run.page.wait_for_function("document.querySelectorAll('.menu-item').length > 0 || window.__stammtisch.hubName === 'liste'")
+    run.page.wait_for_timeout(300)
     items = run.js("[...document.querySelectorAll('.menu-item')].map(a => a.dataset.id)")
     missing = [i for i in reg if i not in items]
     if missing:
-        run.errors.append(f'im Menü fehlen: {missing}')
-    run.shot('1-menue')
+        run.errors.append(f'in #/liste fehlen: {missing}')
+    run.shot('1-liste')
     return reg
 
 

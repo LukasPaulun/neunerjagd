@@ -1,5 +1,5 @@
-/* Menü (Welle 1): einfache Liste aller Spiele mit Bestleistung und Titel.
-   Wird in Welle 3 durch die Oberwelt ersetzt: gleiche Schnittstelle mount(hub) -> Bildschirm.
+/* Listen-Menü (#/liste): einfache Liste aller Spiele mit Bestleistung und Titel.
+   Ersatz für die Oberwelt (Fehlersuche, Barrierefreiheit). Gleiche Schnittstelle wie core/oberwelt.js:
    hub = { el, games:[{id,name,station,best:{score,title}}], from, open(id), ctx, C, VW, VH, loop(fn) }
    Bildschirm = { draw(ctx), onPointer(ev), unmount() } */
 import { hintergrund, dornAst, dornSlot, card, neuntoeter } from './draw.js';

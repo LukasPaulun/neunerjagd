@@ -142,8 +142,6 @@ export default {
 
     /* ---------- Zeichnen ---------- */
 
-    const isDark = () => { const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i.exec(C.bg || ''); return m ? (parseInt(m[1], 16) + parseInt(m[2], 16) + parseInt(m[3], 16)) < 300 : false; };
-
     /* Vereinslogo: Stammtisch mit Wurzeln, eingebrannt ins Holz */
     function logo(ctx, x, y, s) {
       ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
@@ -296,7 +294,7 @@ export default {
       if (shake > 0) ctx.translate(Math.sin(t * 90) * 5 * shake / 0.35, Math.cos(t * 70) * 3 * shake / 0.35);
       dornAst(ctx, BRANCH, NT);
       table(ctx);
-      if (isDark()) { ctx.fillStyle = 'rgba(0,0,0,.25)'; rr(ctx, TABLE.x, TABLE.y, TABLE.w, TABLE.h, 16); ctx.fill(); }
+      if (C.dark) { ctx.fillStyle = 'rgba(0,0,0,.25)'; rr(ctx, TABLE.x, TABLE.y, TABLE.w, TABLE.h, 16); ctx.fill(); }
       spiked.forEach((s, i) => { const p = dornSlot(i, BRANCH, NT); card(ctx, p.x, p.y, p.r, '9', s, .7); });
       for (const h of holes) { holeBack(ctx, h); holeCard(ctx, h); holeFront(ctx, h); }
       for (const f of flashes) drawFlash(ctx, f);
