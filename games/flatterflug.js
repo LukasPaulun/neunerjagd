@@ -17,12 +17,13 @@ const SPACING = 215;     // Abstand der Säulen (px)
 const GROUND = 588;      // Oberkante der Dornenhecke
 const THORN = 40;        // Abstand der Dornen in der Hecke
 const DULLE_H = 50;      // zusätzliche Lückenhöhe, wenn die Dulle in der Lücke steht
-const RAMP = 40;         // nach so vielen Säulen ist die volle Schwierigkeit erreicht
-const diff = n => clamp(n / RAMP, 0, 1);
-const speedAt = d => 135 + 55 * d;      // 135 → 190 px/s
-const gapAt = d => 172 - 42 * d;        // 172 → 130 px freie Lücke
-const shiftAt = d => 120 + 50 * d;      // max. Versatz der Lückenmitte zur vorigen Säule
-const dulleChance = n => (n < 6 ? 0 : 0.12 + 0.1 * diff(n));
+const RAMP = 40;         // nach so vielen Säulen ist die Grundschwierigkeit 1 erreicht …
+const EXTRA = 0.45, EXTRA_N = 60;   // … danach steigt sie langsam weiter, asymptotisch bis 1 + EXTRA
+const diff = n => n <= RAMP ? clamp(n / RAMP, 0, 1) : 1 + EXTRA * (1 - Math.exp(-(n - RAMP) / EXTRA_N));
+const speedAt = d => 135 + 55 * d;      // 135 → 190 px/s (Säule 40) → höchstens ca. 215 px/s
+const gapAt = d => 172 - 42 * d;        // 172 → 130 px freie Lücke (Säule 40) → mindestens ca. 111 px
+const shiftAt = d => Math.min(175, 120 + 50 * d);   // max. Versatz der Lückenmitte zur vorigen Säule
+const dulleChance = n => (n < 6 ? 0 : 0.12 + 0.1 * Math.min(1, diff(n)));
 const NINE_CHANCE = 0.6;
 
 export default {
@@ -34,7 +35,7 @@ export default {
   startLabel: 'Abheben',
   againLabel: 'Nochmal flattern',
   pauseText: 'Der Neuntöter rastet auf einem Weidezaunpfahl.',
-  titles: [[0, 'Nesthocker'], [20, 'Ästling'], [60, 'Flatterwart'], [150, 'Luftschriftführer'], [300, 'Ehrenvorsitzender der Lüfte']],
+  titles: [[0, 'Nesthocker'], [30, 'Ästling'], [100, 'Flatterwart'], [250, 'Luftschriftführer'], [500, 'Ehrenvorsitzender der Lüfte']],
   test: { sekunden: 8, gesten: ['tap', 'hold', 'hold'], zone: [20, 120, 280, 560] },
 
   create(api) {
@@ -120,7 +121,7 @@ export default {
         return;
       }
 
-      api.audio.setIntensity(diff(passed));
+      api.audio.setIntensity(Math.min(1, diff(passed)));
       const v = started ? speedAt(diff(passed)) : speedAt(0);
       dist += v * dt;
       if (!started) { bird.y = 300 + Math.sin(t * 3) * 8; bird.vy = 0; return; }
@@ -191,9 +192,6 @@ export default {
       for (let i = c.lower.length - 1; i >= 0; i--) { const k = c.lower[i]; card(ctx, c.x + k.dx, c.bot + 31 + i * 44, k.r, k.rank, k.suit, 1.1); }
       for (const it of c.items) {
         if (it.kind === 'dulle') {
-          // Heiligenschein: die Dulle steht unberührbar in der Lücke
-          ctx.save(); ctx.strokeStyle = C.gold; ctx.lineWidth = 3; ctx.globalAlpha = .55 + Math.sin(t * 5) * .25;
-          ctx.beginPath(); ctx.ellipse(c.x, it.y, 27, 33, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
           card(ctx, c.x, it.y, Math.sin(t * 2) * .05, '10', '♥', .85);
         } else if (!it.taken) {
           const y = it.y + Math.sin(t * 3 + c.x * .02) * 6;
