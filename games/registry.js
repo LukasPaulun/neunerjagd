@@ -10,7 +10,7 @@ export default [
 
   // 'neuner-hauen',
 
-  // 'neunerschiessen',
+  'neunerschiessen',
 
   // 'kartenhaus',
 ];
