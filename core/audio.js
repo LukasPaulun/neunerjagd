@@ -369,6 +369,7 @@ function fileCandidates(place) {
 function loadTrack(url) {
   const known = tracks.get(url); if (known) return known.p;
   const el = new Audio(), tr = { url, el, tok: 0 };
+  el.crossOrigin = 'anonymous';   // Vorschau-Hoster leiten auf raw.githubusercontent.com um: ohne CORS liefert Web Audio nur Stille
   el.preload = 'auto'; el.loop = true;
   tr.p = new Promise(res => {
     let done = false, to = 0, keep = true;      // keep: 404/Dekodierfehler bleibt gemerkt, Zeitüberschreitung nicht
