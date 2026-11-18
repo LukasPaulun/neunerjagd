@@ -68,7 +68,7 @@ Gameplay **unverändert** übernehmen.
 - Berühren einer Säule, des Bodens oder der Decke = Ende.
 - Schwierigkeit steigt langsam (Lückengröße, Tempo).
 
-### 3. Neuner hauen (Mechanik à la Whack-a-Mole)
+### 3. Neuner klatschen (Mechanik à la Whack-a-Mole)
 - Draufsicht auf die **Stammtischplatte** (Holz). **9 Löcher** im 3×3-Raster.
 - Karten tauchen aus Löchern auf und verschwinden nach kurzer Zeit wieder.
 - Neuner antippen = Neuntöter stößt herab und spießt ihn auf, +9.
@@ -102,7 +102,7 @@ Gameplay **unverändert** übernehmen.
   antippen = Eingangskarte mit Bestleistung und Knopf „Spielen“, kein automatischer Start):
   - Dornbusch → Neunerjagd
   - Windwiese → Flatterflug
-  - Wirtshaus „Zum Stammtisch“ → Neuner hauen
+  - Wirtshaus „Zum Stammtisch“ → Neuner klatschen
   - Schießbude → Neunerschießen
   - Kartenbaustelle → Kartenhaus
   - Vereinsheim → Bestenliste (lokale Bestleistungen aller Spiele, mit Titeln)

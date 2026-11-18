@@ -1,4 +1,4 @@
-/* Neuner hauen – Mechanik à la Whack-a-Mole auf der Stammtischplatte.
+/* Neuner klatschen – Mechanik à la Whack-a-Mole auf der Stammtischplatte.
    9 Löcher im 3×3-Raster, Karten tauchen auf. Neuner antippen: Der Neuntöter stößt herab
    und spießt ihn auf (+9). Andere Karte −1 Leben, Dulle −2. 60 s oder 3 Leben. */
 import { card, neuntoeter, dorn, dornAst, dornSlot, rr, isDulle, RANKS, SUITS, WOOD } from '../core/draw.js';
@@ -30,7 +30,7 @@ const SERIE = [3, 6, 9];             // Serienbonus nach 3, 6, 9+ Neunern in Fol
 
 export default {
   id: 'neuner-hauen',
-  name: 'Neuner hauen',
+  name: 'Neuner klatschen',
   station: 'Wirtshaus „Zum Stammtisch“',
   intro: 'Aus der Stammtischplatte tauchen Karten auf. Tippen Sie jeden Neuner an, bevor er wieder abtaucht: Der Neuntöter stößt herab und spießt ihn auf. Alle anderen Karten lassen Sie bitte in Ruhe.',
   rules: [`Neuner +9 · drei in Folge: Serienbonus +${SERIE[0]} bis +${SERIE[2]}`, 'Andere Karte −1 · Dulle (Herz-Zehn) −2', '3 Leben · 60 Sekunden'],

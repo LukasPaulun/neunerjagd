@@ -355,7 +355,7 @@ leises Schlagwerk).
 |---|---|---|
 | `neunerjagd` | Neunerjagd | Dornbusch |
 | `flatterflug` | Flatterflug | Windwiese |
-| `neuner-hauen` | Neuner hauen | Wirtshaus „Zum Stammtisch“ |
+| `neuner-hauen` | Neuner klatschen | Wirtshaus „Zum Stammtisch“ |
 | `neunerschiessen` | Neunerschießen | Schießbude |
 | `kartenhaus` | Kartenhaus | Kartenbaustelle |
 
