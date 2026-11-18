@@ -13,34 +13,36 @@ const BRANCH = 598, NT = 9;                             // Dornast unten, 9 Dorn
 const TABLE = { x: 8, y: 66, w: 344, h: 492 };
 const MONO = '"IBM Plex Mono",monospace';
 /* Popup-Farben auf dem (festfarbigen) Holz: hell, damit sie hell wie dunkel lesbar sind */
-const P_OK = '#e4f5d2', P_GOLD = '#ffd65a', P_BAD = '#ffc2b6', P_ESC = '#e8dccb';
+const P_OK = '#e4f5d2', P_GOLD = '#ffd65a', P_BAD = '#ffc2b6', P_ESC = '#f3ece2';
 const SWOOP = 0.34, CONTACT = 0.12, FLY = 0.36;         // Vogel-Stoß gesamt, Kontakt, Karten-Flug zum Dorn
 
-/* Schwierigkeit über die Runde, p = 0..1 */
-const tune = p => ({
-  every: lerp(0.95, 0.42, p),        // s zwischen zwei Karten
-  hold: lerp(1.30, 0.62, p),         // s ganz oben
-  rise: lerp(0.17, 0.10, p),         // s Auf- bzw. Abtauchen
-  maxUp: Math.round(lerp(2, 5, p)),  // Karten gleichzeitig
-  nine: lerp(0.52, 0.42, p),         // Anteil Neuner
-  dulle: lerp(0.04, 0.12, p),        // Anteil Dulle (sonst andere Karten)
-});
+/* Schwierigkeit über die Runde, p = 0..1.
+   Anfangs gemütlich, zum Ende hin (p²) deutlich schärfer: kürzer oben, mehr falsche Karten. */
+const tune = p => { const q = p * p; return {
+  every: lerp(0.95, 0.32, p),        // s zwischen zwei Karten
+  hold: lerp(1.20, 0.62, p) - 0.18 * q, // s ganz oben (am Ende ca. 0,44 s)
+  rise: lerp(0.17, 0.09, p),         // s Auf- bzw. Abtauchen
+  maxUp: Math.round(lerp(2, 6, p)),  // Karten gleichzeitig
+  nine: lerp(0.52, 0.40, p) - 0.04 * q, // Anteil Neuner
+  dulle: lerp(0.04, 0.12, p) + 0.04 * q, // Anteil Dulle (sonst andere Karten)
+}; };
+const SERIE = [3, 6, 9];             // Serienbonus nach 3, 6, 9+ Neunern in Folge (gedeckelt)
 
 export default {
   id: 'neuner-hauen',
   name: 'Neuner hauen',
   station: 'Wirtshaus „Zum Stammtisch“',
   intro: 'Aus der Stammtischplatte tauchen Karten auf. Tippen Sie jeden Neuner an, bevor er wieder abtaucht: Der Neuntöter stößt herab und spießt ihn auf. Alle anderen Karten lassen Sie bitte in Ruhe.',
-  rules: ['Neuner +9 · drei in Folge: Serienbonus', 'Andere Karte −1 · Dulle (Herz-Zehn) −2', '3 Leben · 60 Sekunden'],
+  rules: [`Neuner +9 · drei in Folge: Serienbonus +${SERIE[0]} bis +${SERIE[2]}`, 'Andere Karte −1 · Dulle (Herz-Zehn) −2', '3 Leben · 60 Sekunden'],
   startLabel: 'Auf den Tisch hauen',
   againLabel: 'Nächste Runde',
   pauseText: 'Der Wirt wischt kurz über den Tisch.',
-  titles: [[0, 'Laufkundschaft'], [63, 'Stammgast'], [153, 'Tischklopfer'], [270, 'Neunerhauer'], [405, 'Hüter der Tischplatte']],
+  titles: [[0, 'Laufkundschaft'], [90, 'Stammgast'], [200, 'Tischklopfer'], [320, 'Neunerhauer'], [450, 'Hüter der Tischplatte']],
   test: { sekunden: 6, gesten: ['tap'], zone: [26, 150, 334, 510] },
 
   create(api) {
     const { VW, VH, HUD, C } = api;
-    const pops = createPopups();
+    const pops = createPopups({ outline: 'rgba(38,20,8,.82)' });   // dunkler Rand: lesbar auf hellem wie dunklem Holz
     const holes = [];
     for (const y of ROWS) for (const x of COLS) holes.push({ x, y });
     let t, score, lives, streak, nines, esc, fouls, spawnT, spiked, flyers, birds, bursts, flashes, shake, redT, last;
@@ -88,7 +90,7 @@ export default {
       nines++; streak++; last.push(c.suit);
       score += 9; pops.add(tx, ty - 50, '+9', P_OK);
       if (streak % 3 === 0) {
-        const n = Math.min(3, streak / 3), bonus = 9 * n;
+        const n = Math.min(3, streak / 3), bonus = SERIE[n - 1];
         score += bonus;
         pops.add(tx, ty - 74, ['Dreier', 'Sechser', 'Neuner-Serie'][n - 1] + `! +${bonus}`, P_GOLD);
         api.vibrate([15, 30, 15]); api.sfx('neuner', { pitch: 1.5 }); api.sfx('prompt');
