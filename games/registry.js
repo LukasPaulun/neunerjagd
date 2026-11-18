@@ -6,7 +6,7 @@
 export default [
   'neunerjagd',
 
-  // 'flatterflug',
+  'flatterflug',
 
   // 'neuner-hauen',
 
