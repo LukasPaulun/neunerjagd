@@ -235,7 +235,7 @@ function liegendeKarte(ctx, x, y, rot, rank, suit, back) {
    fenster = Fensterrechtecke (relativ) für das Abendlicht, draw(ctx, t) zeichnet relativ zu (x, y). */
 export const BAUTEN = {
   wirtshaus: {
-    hw: 80, d: 54, top: 150, door: 20, sign: [-124, 32],
+    hw: 80, d: 54, top: 150, door: 20, sign: [-150, 62],
     fenster: [[-64, -34, 16, 16], [-35, -34, 16, 16], [19, -34, 16, 16], [48, -34, 16, 16], [-64, -60, 14, 12], [50, -60, 14, 12]],
     draw(ctx, t) {
       shadow(ctx, 0, 0, 92, 12);
@@ -286,7 +286,7 @@ export const BAUTEN = {
   },
 
   dornbusch: {
-    hw: 60, d: 40, top: 112, door: 22, sign: [96, 2], fenster: [],
+    hw: 60, d: 40, top: 112, door: 22, sign: [148, 4], fenster: [],
     draw(ctx, t) {
       shadow(ctx, 0, 0, 70, 12);
       // Zweige mit aufgespießten Neunern
@@ -305,7 +305,7 @@ export const BAUTEN = {
   },
 
   windwiese: {
-    hw: 24, d: 22, top: 126, door: 18, sign: [84, 20], fenster: [[-4, -50, 8, 8]],
+    hw: 24, d: 22, top: 126, door: 18, sign: [-92, 70], fenster: [[-4, -50, 8, 8]],
     draw(ctx, t) {
       // Wiese mit Blumen
       ctx.fillStyle = 'rgba(122,152,101,.28)'; ctx.beginPath(); ctx.ellipse(0, -2, 78, 26, 0, 0, Math.PI * 2); ctx.fill();
@@ -340,7 +340,7 @@ export const BAUTEN = {
   },
 
   schiessbude: {
-    hw: 66, d: 36, top: 132, door: 20, sign: [-98, 58], fenster: [],
+    hw: 66, d: 36, top: 132, door: 20, sign: [-98, 64], fenster: [],
     draw(ctx, t) {
       shadow(ctx, 0, 0, 74, 10);
       // Wimpelkette
@@ -400,7 +400,7 @@ export const BAUTEN = {
   },
 
   vereinsheim: {
-    hw: 60, d: 46, top: 132, door: 20, sign: [-108, 2], fenster: [[-42, -40, 16, 14], [26, -40, 16, 14]],
+    hw: 60, d: 46, top: 132, door: 20, sign: [65, 60], fenster: [[-42, -40, 16, 14], [26, -40, 16, 14]],
     draw(ctx, t) {
       shadow(ctx, 0, 0, 74, 11);
       // Fahnenmast mit Vereinsfahne (durchgestrichene Neun)
@@ -514,19 +514,29 @@ function fensterLicht(ctx, x, y, w, h) {
   ctx.beginPath(); ctx.moveTo(x + w / 2, y); ctx.lineTo(x + w / 2, y + h); ctx.stroke();
 }
 
-/* Stationsschild: Holzbrett auf Pfosten, Fußpunkt (x, y). lines = [Name, Zeile 2] */
+/* Stationsschild: Holzbrett auf Pfosten, Fußpunkt (x, y). sub = Zeile 2 („312 · Titel“); ist sie
+   breiter als SUB_MAX, wird sie am „ · “ auf zwei Zeilen verteilt (Punkte in Mono, Titel in Textschrift).
+   Das Brett bleibt innerhalb der Weltgrenzen (der Pfosten steht weiter auf x). → Bildschirm-Hülle */
+const SUB_MAX = 124;
 export function schild(ctx, x, y, name, sub, hi) {
   ctx.save();
-  ctx.font = `700 13px ${FONT.body}`; const w1 = ctx.measureText(name).width;
-  ctx.font = `600 9.5px ${FONT.mono}`; const w2 = ctx.measureText(sub).width;
-  const w = Math.max(w1, w2) + 18, h = 36, bx = x - w / 2, by = y - 14 - h;
+  const F1 = `700 13px ${FONT.body}`, F2 = `600 9.5px ${FONT.mono}`, F3 = `700 11px ${FONT.body}`;
+  ctx.font = F1; const w1 = ctx.measureText(name).width;
+  ctx.font = F2; let lines = [[sub, F2, ctx.measureText(sub).width]];
+  if (lines[0][2] > SUB_MAX && sub.includes(' · ')) {
+    const [a, ...rest] = sub.split(' · '), b = rest.join(' · ');
+    const wa = ctx.measureText(a).width; ctx.font = F3;
+    lines = [[a, F2, wa], [b, F3, ctx.measureText(b).width]];
+  }
+  const w = Math.ceil(Math.max(w1, ...lines.map(l => l[2]))) + 18, h = 23 + lines.length * 12.5;
+  const bx = Math.max(4, Math.min(WW - 4 - w, x - w / 2)), by = y - 14 - h, cx = bx + w / 2;
   ctx.fillStyle = WOOD; ctx.fillRect(x - 2.5, by + h - 2, 5, 16);
   ctx.fillStyle = 'rgba(0,0,0,.2)'; rr(ctx, bx + 1, by + 3, w, h, 5); ctx.fill();
   ctx.fillStyle = '#6b4630'; rr(ctx, bx, by, w, h, 5); ctx.fill();
   ctx.strokeStyle = hi ? '#e8c96b' : '#4a2f1d'; ctx.lineWidth = hi ? 2 : 1.5; rr(ctx, bx + 2, by + 2, w - 4, h - 4, 4); ctx.stroke();
   ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-  ctx.fillStyle = '#f6ecd6'; ctx.font = `700 13px ${FONT.body}`; ctx.fillText(name, x, by + 16);
-  ctx.fillStyle = '#e8c96b'; ctx.font = `600 9.5px ${FONT.mono}`; ctx.fillText(sub, x, by + 29);
+  ctx.fillStyle = '#f6ecd6'; ctx.font = F1; ctx.fillText(name, cx, by + 16);
+  lines.forEach(([txt, f], i) => { ctx.fillStyle = i ? '#f1dcae' : '#e8c96b'; ctx.font = f; ctx.fillText(txt, cx, by + 29 + i * 12.5); });
   ctx.restore();
   return [bx, by, bx + w, y];
 }

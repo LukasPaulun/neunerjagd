@@ -136,22 +136,22 @@ export default {
     el.className = 'ow'; el.hidden = false;
     const mk = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
     const liste = mk('a', 'ow-liste', 'Liste'); liste.href = '#/liste'; liste.setAttribute('aria-label', 'Alle Spiele als Liste');
-    const hint = mk('div', 'ow-hint', 'Tippen Sie, wohin der Neuntöter hüpfen soll.');
-    hint.hidden = !!store.load(KEY, 'hinweis', false);
-    /* iPhone: Lautlos-Schalter stellt Web Audio stumm. Hinweis einmal zeigen (beim Zeigen gemerkt). */
-    const hints = mk('div', 'ow-hints');
-    hints.append(hint);
-    if (audio.isIOS() && !store.load('ton', 'hinweis', false)) {
-      const tonHint = mk('div', 'ow-hint ow-ton');
-      const x = mk('button', null, '×'); x.type = 'button'; x.setAttribute('aria-label', 'Hinweis schließen');
-      tonHint.append(mk('span', null, 'Kein Ton? Lautlos-Schalter am iPhone prüfen.'), x);
-      tonHint.addEventListener('click', () => { tonHint.remove(); });
-      hints.append(tonHint);
-      store.save('ton', 'hinweis', true);
-    }
+    /* Ein kompakter Hinweis unten: Bedienung (bis zum ersten Tipp) und auf iPhones einmal der
+       Lautlos-Schalter. Verschwindet beim ersten Tipp ins Dorf oder über ×. */
+    const hint = mk('div', 'ow-hint'); hint.setAttribute('role', 'note');
+    const hintLines = [];
+    if (!store.load(KEY, 'hinweis', false)) hintLines.push('Tippen Sie, wohin der Neuntöter hüpfen soll.');
+    if (audio.isIOS() && !store.load('ton', 'hinweis', false)) { hintLines.push('Kein Ton? Lautlos-Schalter am iPhone prüfen.'); store.save('ton', 'hinweis', true); }
+    const hintTxt = mk('div', 'ow-hint-txt');
+    hintLines.forEach(l => hintTxt.append(mk('div', null, l)));
+    const hintX = mk('button', 'ow-hint-x', '×'); hintX.type = 'button'; hintX.setAttribute('aria-label', 'Hinweis schließen');
+    hint.append(hintTxt, hintX);
+    hint.hidden = !hintLines.length;
+    const hideHint = () => { if (hint.hidden) return; hint.hidden = true; store.save(KEY, 'hinweis', true); };
+    hintX.addEventListener('click', hideHint);
     const cardEl = mk('div', 'ow-card'); cardEl.hidden = true; cardEl.setAttribute('role', 'dialog');
     const panel = mk('div', 'ow-panel'); panel.hidden = true; panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-label', 'Bestenliste');
-    el.append(liste, hints, cardEl, panel);
+    el.append(liste, hint, cardEl, panel);
 
     const bestText = b => b && b.score ? `${b.score} · ${b.title || '–'}` : 'noch keine Wertung';
 
@@ -169,6 +169,7 @@ export default {
       });
       cardEl.append(txt, btn);
       if (cardEl.hidden) audio.sfx('prompt');
+      hideHint();
       cardEl.hidden = false;
     }
     function hidePrompt() { if (promptFor) { dismissed = promptFor; promptFor = null; } cardEl.hidden = true; }
@@ -188,7 +189,14 @@ export default {
       if (!games.length) ul.append(mk('li', 'rules', 'Keine Spiele registriert.'));
       const close = mk('button', 'big ow-close', 'Schließen'); close.type = 'button';
       close.addEventListener('click', closePanel);
-      panel.append(head, ul, close);
+      const x = mk('button', 'ow-panel-x', '×'); x.type = 'button'; x.setAttribute('aria-label', 'Bestenliste schließen');
+      x.addEventListener('click', closePanel);
+      const credits = mk('div', 'ow-credits'); credits.hidden = true;
+      audio.credits().then(lines => {
+        if (!lines.length || !panelOpen) return;
+        lines.forEach(l => credits.append(mk('div', null, l))); credits.hidden = false;
+      });
+      panel.append(x, head, ul, close, credits);
       panel.hidden = false;
       close.focus({ preventScroll: true });
     }
@@ -214,7 +222,7 @@ export default {
       return best;
     }
     function tapWorld(x, y) {
-      if (!hint.hidden) { hint.hidden = true; store.save(KEY, 'hinweis', true); }
+      hideHint();
       const s = stationAt(x, y);
       if (s) {
         if (dist(bird.x, bird.y, s.door.x, s.door.y) < TRIGGER && !bird.moving) { showPrompt(s); return; }
