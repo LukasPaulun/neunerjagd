@@ -10,7 +10,9 @@ welche lokale Übergangslösung im Spiel steckt (Datei/Funktion).
 
 ## neuner-hauen
 
-(keine)
+- **Hell/Dunkel-Kennung in `C`** (z. B. `C.dark = true/false` in `core/theme.js`). Warum: Festfarben wie die
+  Holz-Tischplatte sollen im Dunkelmodus leicht abgedunkelt werden. Übergangslösung: `isDark()` in
+  `games/neuner-hauen.js` schätzt die Helligkeit aus `C.bg`.
 
 ## neunerschiessen
 
