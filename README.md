@@ -2,7 +2,7 @@
 
 Minispiel-Sammlung des Doppelkopf-Stammtischs (n.e.v.) mit dem Neuntöter als Maskottchen.
 Fürs Handy im Hochformat. Einstieg ist das Stammtischdorf, von dort geht es in fünf Spiele:
-Neunerjagd, Flatterflug, Neuner hauen, Neunerschießen und Kartenhaus.
+Neunerjagd, Flatterflug, Neuner klatschen, Neunerschießen und Kartenhaus.
 
 - Gestaltung und Regeln: `DESIGN.md`
 - Technik und neue Spiele eintragen: `ARCHITEKTUR.md`
