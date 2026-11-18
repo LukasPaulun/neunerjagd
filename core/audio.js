@@ -331,7 +331,7 @@ function startTimer() { if (!timer) timer = setInterval(tick, TICK_MS); }
 function stopTimer() { if (timer) { clearInterval(timer); timer = 0; } }
 
 function tick() {
-  if (!seq || seq.paused || !ctx || ctx.state !== 'running') return;
+  if (!seq || seq.kind !== 'synth' || seq.paused || !ctx || ctx.state !== 'running') return;
   const now = ctx.currentTime;
   if (seq.next < now) seq.next = now + 0.03;     // hinterher (Tab war im Hintergrund): neu ansetzen
   while (seq.next < now + LOOKAHEAD) {
@@ -343,17 +343,95 @@ function tick() {
 
 /* Laufende Musiknoten schnell ausblenden und stoppen (kein Knacken, keine Reste) */
 function silence(s) {
-  if (!G || !s) return;
+  if (!G || !s || s.kind !== 'synth') return;
   const now = ctx.currentTime, p = G.seqOut.gain;
   p.cancelScheduledValues(now); p.setValueAtTime(p.value, now); p.linearRampToValueAtTime(0, now + 0.05);
   for (const v of s.set) v.stop(now + 0.06);
   p.setValueAtTime(0, now + 0.07); p.linearRampToValueAtTime(1, now + 0.09);
 }
 
+/* ---------------- Musik aus Dateien (optional) ----------------
+   Liegt für den Ort eine Aufnahme in musik/, spielt sie statt des erzeugten Lieds:
+   Dorf: musik/dorf.mp3. Spiel <id>: musik/<id>.mp3, sonst musik/spiel.mp3. Fehlt die Datei (404)
+   oder lädt sie nicht, gilt das erzeugte Lied (Walzer bzw. Polka). Gestreamt über ein
+   HTMLAudioElement (MediaElementSource) in den Musik-Regler, also stumm bei „Nur Effekte“/„Aus“.
+   Geladen wird erst, wenn der Ort Musik braucht, und nur dessen Datei. Ergebnis pro URL gemerkt. */
+const FILE_GAIN = 2.0;          // Pegel der Aufnahmen relativ zum Musik-Regler (VOL.music)
+const FADE = 0.3;               // s Ein-/Ausblenden bei Ortswechsel, Start und Pause
+const FILE_SPEEDUP = 0.05;      // Aufnahmen höchstens 5 % schneller (setIntensity)
+const LOAD_TIMEOUT = 10000;     // ms; danach erzeugte Musik (die Datei wird beim nächsten Mal neu versucht)
+const tracks = new Map();       // url -> { url, el, p: Promise<track|null>, node?, gain?, tok }
+
+function fileCandidates(place) {
+  if (place === 'dorf') return ['musik/dorf.mp3'];
+  return (place && place !== 'spiel' ? [`musik/${place}.mp3`] : []).concat('musik/spiel.mp3');
+}
+function loadTrack(url) {
+  const known = tracks.get(url); if (known) return known.p;
+  const el = new Audio(), tr = { url, el, tok: 0 };
+  el.preload = 'auto'; el.loop = true;
+  tr.p = new Promise(res => {
+    let done = false, to = 0, keep = true;      // keep: 404/Dekodierfehler bleibt gemerkt, Zeitüberschreitung nicht
+    const fin = ok => {
+      if (done) return; done = true; clearTimeout(to);
+      if (!ok) { if (!keep) tracks.delete(url); el.removeAttribute('src'); try { el.load(); } catch (e) {} }
+      res(ok ? tr : null);
+    };
+    el.addEventListener('canplay', () => fin(true), { once: true });
+    el.addEventListener('error', () => fin(false), { once: true });
+    to = setTimeout(() => { keep = false; fin(false); }, LOAD_TIMEOUT);
+    el.src = url;
+  });
+  tracks.set(url, tr);
+  return tr.p;
+}
+async function findTrack(place) {
+  for (const url of fileCandidates(place)) { const tr = await loadTrack(url); if (tr) return tr; }
+  return null;
+}
+const fileRate = () => 1 + FILE_SPEEDUP * intensity;
+function fileFade(tr, to, dur) {
+  const g = tr.gain.gain, now = ctx.currentTime;
+  g.cancelScheduledValues(now); g.setValueAtTime(g.value, now); g.linearRampToValueAtTime(to, now + dur);
+}
+function filePlay(tr) {
+  const p = tr.el.play(); if (p && p.catch) p.catch(() => {});
+  fileFade(tr, FILE_GAIN, FADE); tr.tok++;
+}
+function fileStop(tr, dur = FADE) {           // ausblenden, danach anhalten (falls nicht wieder gestartet)
+  if (!tr.gain) return;
+  fileFade(tr, 0, dur);
+  const tok = ++tr.tok;
+  setTimeout(() => { if (tr.tok === tok) tr.el.pause(); }, dur * 1000 + 30);
+}
+function startFile(tr, w) {
+  if (!tr.node) { tr.node = ctx.createMediaElementSource(tr.el); tr.gain = ctx.createGain(); tr.gain.gain.value = 0; tr.node.connect(tr.gain); tr.gain.connect(G.music); }
+  seq = { kind: 'file', tr, want: w, paused: !!w.paused };
+  try { tr.el.currentTime = 0; } catch (e) {}
+  tr.el.playbackRate = fileRate();
+  if (!seq.paused && !document.hidden) filePlay(tr);
+}
+function startSynth(w) {
+  seq = { kind: 'synth', want: w, S: SONGS[w.name], tr: w.tr, step: 0, next: ctx.currentTime + 0.1, paused: !!w.paused, set: new Set() };
+  if (!seq.paused) startTimer();
+}
+/* Laufende Musik beenden (Synth: kurz ausblenden; Datei: FADE ausblenden) */
+function stopCurrent() {
+  if (!seq) return;
+  if (seq.kind === 'synth') silence(seq);
+  else if (seq.kind === 'file') fileStop(seq.tr);
+  seq = null; stopTimer();
+}
+
 function startSeq() {
   if (!want || !G) return;
-  seq = { S: SONGS[want.name], tr: want.tr, step: 0, next: ctx.currentTime + 0.1, paused: !!want.paused, set: new Set() };
-  if (!seq.paused) startTimer();
+  const w = want;
+  seq = { kind: 'wait', want: w, paused: !!w.paused };     // Platzhalter, bis klar ist: Datei oder Synth
+  findTrack(w.place).then(tr => {
+    if (!seq || seq.want !== w || want !== w) return;      // Ort inzwischen gewechselt
+    const paused = seq.paused; w.paused = paused;
+    if (tr) startFile(tr, w); else startSynth(w);
+  });
 }
 
 /* Erste Nutzergeste: Kontext erzeugen bzw. fortsetzen. Danach wartende Musik starten. */
@@ -373,34 +451,54 @@ if (typeof document !== 'undefined') {
   for (const ev of ['pointerup', 'touchend', 'mousedown', 'click', 'keydown']) document.addEventListener(ev, unlock, { capture: true, passive: true });
   document.addEventListener('visibilitychange', () => {
     if (!ctx) return;
-    if (document.hidden) { if (ctx.state === 'running') ctx.suspend().catch(() => {}); }
-    else if (ctx.state !== 'running') ctx.resume().catch(() => {});
+    if (document.hidden) { if (ctx.state === 'running') ctx.suspend().catch(() => {}); if (seq && seq.kind === 'file') seq.tr.el.pause(); }
+    else {
+      if (ctx.state !== 'running') ctx.resume().catch(() => {});
+      if (seq && seq.kind === 'file' && !seq.paused) filePlay(seq.tr);
+    }
   });
 }
 
-/* Musik: name 'dorf' | 'polka'. opts: { tonart: Halbtöne, restart: true = von vorn } */
+/* Musik: name 'dorf' | 'polka' (erzeugtes Lied als Rückfall).
+   opts: { tonart: Halbtöne, restart: true = von vorn, place: 'dorf' | Spiel-id (für musik/<place>.mp3) } */
 export function playMusic(name, opts = {}) {
   if (!SONGS[name]) return;
-  const tr = opts.tonart | 0;
-  if (!opts.restart && want && want.name === name && want.tr === tr) { if (seq && seq.paused) resumeMusic(); return; }
-  if (seq) silence(seq);
-  seq = null; stopTimer();
-  want = { name, tr };
+  const tr = opts.tonart | 0, place = opts.place || (name === 'dorf' ? 'dorf' : 'spiel');
+  if (!opts.restart && want && want.name === name && want.tr === tr && want.place === place) { if (seq && seq.paused) resumeMusic(); return; }
+  stopCurrent();
+  want = { name, tr, place };
   if (ctx && ctx.state === 'running') startSeq();
 }
-export function stopMusic() { if (seq) silence(seq); seq = null; want = null; stopTimer(); }
+export function stopMusic() { stopCurrent(); want = null; }
 export function pauseMusic() {
   if (want) want.paused = true;
   if (!seq || seq.paused) return;
-  seq.paused = true; silence(seq); stopTimer();
+  seq.paused = true;
+  if (seq.kind === 'synth') { silence(seq); stopTimer(); }
+  else if (seq.kind === 'file') fileStop(seq.tr, 0.15);
 }
 export function resumeMusic() {
   if (want) want.paused = false;
   if (!seq || !seq.paused) return;
-  seq.paused = false; seq.next = ctx.currentTime + 0.1; startTimer();
+  seq.paused = false;
+  if (seq.kind === 'synth') { seq.next = ctx.currentTime + 0.1; startTimer(); }
+  else if (seq.kind === 'file') filePlay(seq.tr);
 }
-/* 0..1: Polka wird bis zu 18 % schneller */
-export function setIntensity(x) { intensity = x > 1 ? 1 : x > 0 ? x : 0; }
+/* 0..1: Polka wird bis zu 18 % schneller, Aufnahmen bis zu 5 % */
+export function setIntensity(x) {
+  intensity = x > 1 ? 1 : x > 0 ? x : 0;
+  if (seq && seq.kind === 'file') { const r = fileRate(); if (Math.abs(seq.tr.el.playbackRate - r) > 0.002) seq.tr.el.playbackRate = r; }
+}
+
+/* Mitwirkende der Aufnahmen: musik/credits.json (Array von Zeilen), sonst []. Einmal geladen. */
+let creditsP = null;
+export function credits() {
+  if (!creditsP) creditsP = (typeof fetch === 'function' ? fetch('musik/credits.json', { cache: 'no-cache' }) : Promise.reject())
+    .then(r => (r.ok ? r.json() : []))
+    .then(a => (Array.isArray(a) ? a.filter(x => typeof x === 'string' && x.trim()).slice(0, 12) : []))
+    .catch(() => []);
+  return creditsP;
+}
 
 /* Geräusch abspielen. Leise ignoriert, wenn Ton aus, Kontext nicht bereit, Abklingzeit oder Stimmenlimit. */
 export function sfx(name, opts) {
@@ -418,7 +516,7 @@ export const getMode = () => mode;
 export function setMode(m) {
   if (!MODES.includes(m)) return;
   mode = m; lsSet(KEY, m); applyMode();
-  if (m !== 'an' && seq) silence(seq);
+  if (m !== 'an' && seq) silence(seq);   // Synth-Noten sofort aus; Dateien laufen stumm weiter (Musik-Regler 0)
   for (const cb of modeCbs) cb(m);
 }
 export function cycleMode() { setMode(MODES[(MODES.indexOf(mode) + 1) % MODES.length]); return mode; }
@@ -433,7 +531,12 @@ export function isIOS() {
 export const debug = {
   get state() { return ctx ? ctx.state : 'none'; },
   get voices() { return G ? G.voices : 0; },
-  get music() { return seq ? { name: seq.S.name, step: seq.step, paused: seq.paused, tonart: seq.tr } : want ? { name: want.name, wartet: true } : null; },
+  get music() {
+    if (!seq) return want ? { name: want.name, place: want.place, wartet: true } : null;
+    if (seq.kind === 'file') { const e = seq.tr.el; return { name: seq.want.name, place: seq.want.place, file: seq.tr.url, paused: seq.paused, time: e.currentTime, playing: !e.paused, rate: e.playbackRate, loop: e.loop, gain: seq.tr.gain.gain.value }; }
+    if (seq.kind === 'wait') return { name: seq.want.name, place: seq.want.place, sucht: true, paused: seq.paused };
+    return { name: seq.S.name, place: seq.want.place, step: seq.step, paused: seq.paused, tonart: seq.tr };
+  },
   get intensity() { return intensity; },
   get mode() { return mode; },
   sounds: Object.keys(SFX),
