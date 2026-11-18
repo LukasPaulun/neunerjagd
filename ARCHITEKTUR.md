@@ -17,7 +17,7 @@ core/draw.js          rr, card, neuntoeter, dorn, dornAst, dornSlot, hintergrund
 core/hud.js           hud, hudBar, hudLabel, hudValue, hudHearts, createPopups
 core/util.js          clamp, lerp, rand, randInt, pick, dist, vibrate
 core/store.js         Bestleistungen und Spielstände (localStorage)
-core/audio.js         Ton: Musik (Walzer im Dorf, Polka im Spiel) und Geräusche, alles Web Audio, Tonmodus
+core/audio.js         Ton: Musik (Aufnahmen aus musik/, sonst erzeugter Walzer/Polka) und Geräusche (Web Audio), Tonmodus
 core/router.js        Hash-Routing
 core/oberwelt.js      Hub: Oberwelt „Stammtischdorf“ (Bewegung, Wegfindung, Kamera, Eingangskarte, Bestenliste)
 core/oberwelt-welt.js Oberwelt: Stationstabelle STATIONEN, Wege, Bäume, Zäune, Bauten (Zeichnen)
@@ -28,6 +28,7 @@ games/_vorlage.js     Kommentiertes Minimalspiel zum Kopieren (nicht im Menü)
 tests/smoke.py        Rauchtest (Playwright)
 tests/oberwelt.py     Ablauftest der Oberwelt (Playwright)
 KERN-WUENSCHE.md      Änderungswünsche an core/ von parallelen Agenten
+musik/                optional: Musikaufnahmen (dorf.mp3, <spiel-id>.mp3, spiel.mp3) und credits.json, siehe „Ton“
 ```
 
 Ein Spiel = **eine Datei** `games/<id>.js`. Größere Spiele dürfen zusätzliche Dateien in
@@ -46,6 +47,13 @@ und relativ importieren.
   geöffnete Spiel (`stammtisch-zuletzt`); der Hub bekommt es als `from` (Menü hebt es hervor,
   die Oberwelt hebt das Schild hervor). Kommt man direkt aus einem Spiel (`fromGame`), stellt die
   Oberwelt den Vogel vor diese Station, sonst an die gespeicherte Position.
+
+## Hülle (`index.html`, `core/main.js`)
+
+- Kopfzeile: Titel schrumpft per Skript, bis er in die Zeile passt (kein „Der Stammti…“).
+- Bühne 9:16, so breit wie möglich (höchstens Bildschirmhöhe − 88 px), senkrecht mittig im Rest.
+- Querformat auf Touch-Handys (`orientation: landscape`, `pointer: coarse`, Höhe ≤ 600 px): Vollbild-
+  Hinweis „Bitte das Handy hochkant halten“ mit drehendem Handy-Symbol; ein laufendes Spiel pausiert.
 
 ## Koordinaten
 
@@ -91,6 +99,13 @@ Ablauf (Engine-Zustände `intro` → `play` ⇄ `pause`, `play` → `over` → `
 Start-Knopf → `reset()` → Schleife `step/draw`. Pause-Knopf oder App-Wechsel → `pause`.
 Das Spiel beendet eine Runde selbst mit `api.end({ score, text })`. Die Engine zeigt dann den
 Rang-Titel als Überschrift, `text` als Absatz, den Knopf `againLabel` und die Bestleistung.
+Der Knopf am Ende nimmt erst nach 0,8 s Eingaben an (blendet dann ein), damit noch tippende Spieler
+nicht versehentlich neu starten.
+
+Overlay-Texte (`intro`, `rules`, `text`): Die Engine setzt geschützte Leerzeichen zwischen Zahl und
+Wort („+9“, „−18“, „3 Leben“ brechen nicht um). Die Overlay-Schrift skaliert mit der Bühne
+(CSS-Container-Einheiten), der Textblock darf schrumpfen und scrollen; Titel und Knopf bleiben
+immer sichtbar (geprüft bis 320 × 568 und 375 × 553). Kurz halten lohnt sich trotzdem.
 
 `draw` muss jederzeit funktionieren, auch vor dem ersten `step` (nach `reset`).
 
@@ -206,7 +221,7 @@ Reine Funktionen aus `core/draw.js`, `core/hud.js`, `core/util.js` und `relDrag`
 | `hudLabel(ctx, x, text)` | Beschriftung Versalien, Mono 12, y = 20 |
 | `hudValue(ctx, x, value, color = C.ink)` | Wert Mono 20, y = 44 |
 | `hudHearts(ctx, x, lives)` | Herzen in `C.bad`, y = 44 |
-| `createPopups()` | → `{add(x, y, text, color), step(dt), draw(ctx), clear(), count}` schwebende Texte |
+| `createPopups(o?)` | → `{add(x, y, text, color), step(dt), draw(ctx), clear(), count}` schwebende Texte; `o.outline` = Farbe eines dunklen Rands (Text auf Holz o. Ä.) |
 
 ### `core/util.js`
 
@@ -251,15 +266,20 @@ Tastatur wird nicht unterstützt.
   - `stammtisch-zuletzt` → id des zuletzt geöffneten Spiels
   - `stammtisch-oberwelt-pos` → `{x, y}` Vogelposition in der Oberwelt, `stammtisch-oberwelt-hinweis` → Hinweis gesehen
   - `stammtisch-ton` → `'an' | 'effekte' | 'aus'` (Tonmodus), `stammtisch-ton-hinweis` → iPhone-Hinweis gezeigt
+- Wirft `localStorage` (gesperrt, privater Modus), gelten geschriebene Werte trotzdem für die laufende
+  Sitzung (Kopie im Speicher, zusätzlich `sessionStorage`): Bestleistung und „zuletzt gespielt“
+  gehen nicht verloren, der Vogel steht nach dem Spiel vor der Station.
 - `core/store.js`: `getBest(id)`, `setBest(id, score, title)` (nur wenn höher, → true),
   `load(id, key, fallback)`, `save(id, key, value)`, `getLast()`, `setLast(id)`. Spiele nutzen
   stattdessen `api.best/load/save`.
 
 ## Ton (`core/audio.js`)
 
-Alles wird zur Laufzeit mit der Web Audio API erzeugt: keine Tondateien, keine Bibliothek, nur
-eigene Melodien (Notendaten in `audio.js`). Stil: kleine Wirtshaus-Blasmusik (Akkordeon aus zwei
-verstimmten Sägezähnen mit Tiefpass und Tremolo, Tuba-Bass, Nachschlag-Akkorde, leises Schlagwerk).
+Geräusche werden zur Laufzeit mit der Web Audio API erzeugt (keine Dateien, keine Bibliothek).
+Musik kommt bevorzugt aus **Aufnahmen** im Ordner `musik/` (eine pro Ort, siehe unten); fehlt eine,
+spielt das erzeugte Lied (eigene Melodien, Notendaten in `audio.js`, Stil kleine Wirtshaus-Blasmusik:
+Akkordeon aus zwei verstimmten Sägezähnen mit Tiefpass und Tremolo, Tuba-Bass, Nachschlag-Akkorde,
+leises Schlagwerk).
 
 - **Entsperren:** Der AudioContext entsteht erst bei der ersten Nutzergeste (`pointerup`,
   `touchend`, `click`, …, auf `document`), iOS-tauglich. Vorher gewünschte Musik startet dann.
@@ -270,6 +290,26 @@ verstimmten Sägezähnen mit Tiefpass und Tremolo, Tuba-Bass, Nachschlag-Akkorde
   Start/„Nochmal“ = Polka von vorn, Pause (Knopf oder App-Wechsel) = Musik pausiert, Ende =
   Musik aus + Tusch (neue Bestleistung) bzw. kurze traurige Posaunenfigur, Verlassen = Musik aus.
   Bei `visibilitychange` (verborgen) wird der ganze Kontext angehalten.
+- **Musikdateien (optional, `musik/`)** – eine Aufnahme pro Ort:
+
+| Ort | Datei, der Reihe nach versucht | Rückfall |
+|---|---|---|
+| Dorf (`#/`, `#/liste`) | `musik/dorf.mp3` | Walzer |
+| Spiel `<id>` | `musik/<id>.mp3`, dann `musik/spiel.mp3` | Polka |
+
+  Gestreamt über ein `HTMLAudioElement` (`MediaElementSource`) in den Musik-Regler: Tonmodus
+  „Nur Effekte“/„Aus“ macht sie stumm, Pause hält sie an, App-Wechsel ebenso. Geladen wird erst,
+  wenn der Ort Musik braucht, und nur dessen Datei (`preload="auto"`, Start bei `canplay`). Schleife
+  über `loop`. Orts­wechsel, Start und Ende blenden 0,3 s aus/ein. Tempo steigt mit `setIntensity`
+  um höchstens 5 % (`playbackRate`, Tonhöhe bleibt). Antwortet der Server mit 404 oder ist die Datei
+  nicht abspielbar, gilt das erzeugte Lied (Ergebnis pro Datei für die Sitzung gemerkt; nach
+  10 s ohne Ladeerfolg ebenfalls Rückfall, dann neuer Versuch beim nächsten Ortswechsel).
+  Empfehlung: MP3, 96–128 kbit/s, 2–4 min, Anfang und Ende schleifenfähig, Pegel ca. −14 LUFS
+  (`FILE_GAIN` in `audio.js` gleicht den Pegel an die Geräusche an). Rechte klären!
+- **Mitwirkende:** `musik/credits.json` = JSON-Array von Textzeilen (höchstens 12), z. B.
+  `["Musik: „Abendschoppen“ – Kapelle XY (CC BY 4.0)"]`. Steht unten in der Bestenliste
+  (Vereinsheim), wenn die Datei da ist; sonst nichts. Fehlende Dateien unter `musik/` sind
+  kein Testfehler (`tests/smoke.py`, `OPTIONAL`).
 - **Geräusche** (`api.sfx(name, opts)`), jedes mit eigener Abklingzeit, global höchstens 48 Stimmen:
 
 | name | wofür | opts |
@@ -290,10 +330,17 @@ verstimmten Sägezähnen mit Tiefpass und Tremolo, Tuba-Bass, Nachschlag-Akkorde
 | `tusch`, `traurig` | Schlussfiguren (macht die Engine) | |
 
 - **Tonmodus:** Lautsprecher-Knopf oben rechts in der Kopfzeile, Tipp schaltet
-  alles an → nur Effekte → aus (Symbol, `aria-label`, kurzer Schriftzug), gespeichert in `stammtisch-ton`.
+  alles an → nur Effekte → aus (Symbol, `aria-label`, kurzer Schriftzug links neben dem Knopf),
+  gespeichert in `stammtisch-ton`. Die Schlussfiguren (Tusch, Posaune) sind Effekte und erklingen
+  auch bei „Nur Effekte“.
 - **iPhone:** iOS stellt Web Audio bei aktivem Lautlos-Schalter stumm. Die Oberwelt zeigt auf
-  iOS-Geräten einmal den Hinweis „Kein Ton? Lautlos-Schalter am iPhone prüfen.“
-- **Test-Hook:** `window.__stammtisch.audio` (`state`, `voices`, `music`, `intensity`, `mode`,
+  iOS-Geräten einmal den Hinweis „Kein Ton? Lautlos-Schalter am iPhone prüfen.“ (im selben kleinen
+  Hinweiskasten unten wie die Bedienhilfe; verschwindet beim ersten Tipp ins Dorf oder über ×).
+- **Schnittstelle (Kern):** `playMusic(name, {tonart, restart, place})` (`place` = `'dorf'` oder
+  Spiel-id; die Engine setzt sie), `stopMusic()`, `pauseMusic()`, `resumeMusic()`, `credits()` →
+  `Promise<string[]>`.
+- **Test-Hook:** `window.__stammtisch.audio` (`state`, `voices`, `music` (bei Aufnahmen mit `file`,
+  `time`, `playing`, `rate`), `intensity`, `mode`,
   `sounds`, `render(name, sekunden, opts)` → `Promise<AudioBuffer>` per OfflineAudioContext).
 
 ## Spiel eintragen
@@ -340,6 +387,12 @@ Animationsschleife (zeichnet nach jedem `fn`), gibt `stop()` zurück.
 - Vereinsheim (fest, kein Spiel): Karte „Eintreten“ → Bestenliste aller Registry-Spiele.
 - Dunkelmodus (`C.dark`): Boden in dunklen Farben, Abendschleier über den Bauten, danach
   Fensterlichter, Laternen und Schilder.
+- Schilder: Zeile 2 („312 · Titel“) wird bei mehr als 124 Einheiten Breite auf zwei Zeilen verteilt;
+  das Brett bleibt in den Weltgrenzen. Schilder dürfen weder einander noch einen Bau überdecken
+  (auch nicht den eigenen); Prüfen mit den längsten Titeln.
+- Hinweiskasten unten (Bedienung beim ersten Besuch, iPhone-Lautlos-Hinweis), verschwindet beim
+  ersten Tipp. Bestenliste: × oben rechts (bleibt beim Scrollen stehen) und „Schließen“ unten;
+  darunter die Mitwirkenden aus `musik/credits.json`.
 - Test-Hook: `window.__stammtisch.hub` (`stations`, `bird`, `prompt`, `panel`, `door(id)`,
   `screenPoint(id)`, `toScreen(x, y)`), `window.__stammtisch.hubName` (`'oberwelt'|'liste'`).
 

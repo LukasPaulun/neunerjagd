@@ -29,6 +29,7 @@ Die Spiele werden von den Vereinsmitgliedern auf dem Handy gespielt, Link wird i
 ## Zielplattform
 
 - **Nur Handy, Hochformat, nur Touch.** Keine Desktop-Layouts, keine Tastatursteuerung nötig.
+  Im Querformat zeigt die Seite auf Touch-Handys „Bitte das Handy hochkant halten“ und pausiert das Spiel.
   Maus-Klick darf als Fallback funktionieren (für Tests), mehr nicht.
 - Spielfeld in festen Weltkoordinaten **360 × 640** (9:16), skaliert auf die Bildschirmbreite.
 - Touch-Ziele mindestens 44 × 44 px (Weltkoordinaten). Finger soll wichtige Objekte nicht verdecken.
@@ -79,7 +80,8 @@ Gameplay **unverändert** übernehmen.
 - Kulisse: Wiese/Hecke mit Tiefenebenen (fern, mittel, nah). Karten flattern quer über den
   Bildschirm, ferne Karten kleiner und mehr Punkte.
 - Tippen = Schuss mit einem **Dorn** an diese Stelle. Treffer auf Neuner = aufgespießt.
-- Magazin: 8 Dornen. **Nachladen = „Mischen“**: Nach-unten-Wischen oder Tipp auf das Dornen-Symbol.
+- Magazin: 8 Dornen. **Nachladen = „Mischen“**: Tipp auf den großen Knopf „Mischen“ (Dornenbündel) links
+  unten. Kein Wischen (ein Wisch begann sonst mit einem Schuss).
 - Andere Karte getroffen = Punktabzug, Dulle = großer Abzug.
 - Runde 90 s. Kein Sonderziel: Die Kreuz-Dame ist eine normale Karte.
 
