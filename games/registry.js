@@ -12,5 +12,5 @@ export default [
 
   'neunerschiessen',
 
-  // 'kartenhaus',
+  'kartenhaus',
 ];
