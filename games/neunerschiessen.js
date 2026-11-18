@@ -1,6 +1,6 @@
 /* Neunerschießen – Schießbude. Karten flattern in drei Tiefenebenen über Wiese und Hecke.
    Tippen = der Neuntöter schießt einen Dorn an die Stelle. 8 Dornen, Nachladen = „Mischen“
-   (nach unten wischen oder Tipp aufs Dornenbündel). 90 Sekunden. */
+   (Tipp auf den Knopf mit dem Dornenbündel links unten). 90 Sekunden. */
 import { card, neuntoeter, dorn, rr, isDulle, RANKS, SUITS, WOOD } from '../core/draw.js';
 import { hud, createPopups } from '../core/hud.js';
 import { rand, pick, clamp } from '../core/util.js';
@@ -8,43 +8,43 @@ import { rand, pick, clamp } from '../core/util.js';
 const DAUER = 90, MAG = 8, RELOAD = 0.55;
 const MONO = '"IBM Plex Mono",monospace';
 const THEKE = 556;                        // Oberkante der Schießbuden-Theke
-const BUNDLE = { x: 44, y: 604, r: 30 };  // Dornenbündel = Mischen-Knopf
+const BUNDLE = { x: 6, y: 563, w: 86, h: 71 };  // Mischen-Knopf mit Dornenbündel (links auf der Theke)
 const BIRD = { x: 304, y: 537, s: 1.0 };
 const P_ANDERE = 9, P_DULLE = 18;   // Dulle kostet doppelt
 
 /* Tiefenebenen: Größe, Punkte, Flughöhe, Tempo, Spawn-Abstand */
 const LAYERS = [
-  { name: 'fern', s: .55, pts: 27, y0: 105, y1: 205, amp: 10, v: [42, 66], gap: 1.9 },
-  { name: 'mittel', s: .82, pts: 18, y0: 262, y1: 335, amp: 14, v: [68, 104], gap: 1.6 },
-  { name: 'nah', s: 1.15, pts: 9, y0: 398, y1: 462, amp: 16, v: [100, 148], gap: 2.1 },
+  { name: 'fern', s: .78, pts: 27, y0: 108, y1: 200, amp: 12, v: [58, 92], gap: 1.9 },
+  { name: 'mittel', s: .96, pts: 18, y0: 262, y1: 330, amp: 15, v: [80, 124], gap: 1.6 },
+  { name: 'nah', s: 1.2, pts: 9, y0: 398, y1: 458, amp: 16, v: [108, 158], gap: 2.1 },
 ];
 
 export default {
   id: 'neunerschiessen',
   name: 'Neunerschießen',
   station: 'Schießbude',
-  intro: 'Die Neuner flattern über Wiese und Hecke. Tippen Sie auf einen Neuner, der Neuntöter schießt einen Dorn genau dorthin. Je weiter weg, desto mehr Punkte. Ist der Vorrat leer, wischen Sie nach unten oder tippen Sie aufs Dornenbündel: Mischen.',
+  intro: 'Die Neuner flattern über Wiese und Hecke. Tippen Sie auf einen Neuner, der Neuntöter schießt einen Dorn genau dorthin. Je weiter weg, desto mehr Punkte. Ist der Vorrat leer, tippen Sie links unten auf „Mischen“.',
   rules: [
     'Neuner: nah +9 · mittel +18 · fern +27',
     `Andere Karte −${P_ANDERE} · Dulle (Herz-Zehn) −${P_DULLE}`,
-    '8 Dornen · 90 Sekunden',
+    '8 Dornen · Nachladen: „Mischen“ · 90 Sekunden',
   ],
   startLabel: 'Anlegen',
   againLabel: 'Nochmal anlegen',
   pauseText: 'Feuerpause. Die Schießbude bleibt besetzt.',
-  titles: [[0, 'Platzpatrone'], [150, 'Schützenbruder'], [350, 'Dornenschütze'], [600, 'Schützenkönig'], [900, 'Vereinsscharfrichter']],
-  test: { sekunden: 8, gesten: ['tap', 'tap', 'tap', 'drag'], zone: [20, 80, 340, 540] },
+  titles: [[0, 'Platzpatrone'], [250, 'Schützenbruder'], [550, 'Dornenschütze'], [900, 'Schützenkönig'], [1300, 'Vereinsscharfrichter']],
+  test: { sekunden: 8, gesten: ['tap', 'tap', 'tap', 'tap'], zone: [20, 80, 340, 600] },
 
   create(api) {
     const { VW, VH, HUD, C } = api;
     const pops = createPopups();
     let cards, falling, marks, tracers, score, nines, shots, hits, fouls, t, ammo, reloading, shake, shootAnim;
-    let spawnT, gesture, ended;
+    let spawnT, ended;
 
     function reset() {
       cards = []; falling = []; marks = []; tracers = []; pops.clear();
       score = 0; nines = 0; shots = 0; hits = 0; fouls = 0; t = 0;
-      ammo = MAG; reloading = 0; shake = 0; shootAnim = 0; gesture = null; ended = false;
+      ammo = MAG; reloading = 0; shake = 0; shootAnim = 0; ended = false;
       spawnT = [0.2, 0.6, 1.0];
       // ein paar Karten schon in der Luft, damit das Bild hinter dem Start-Overlay lebt
       for (let li = 0; li < 3; li++) for (let k = 0; k < 2; k++) { const c = spawn(li); c.x = rand(50, VW - 50); }
@@ -62,7 +62,7 @@ export default {
 
     function spawn(li) {
       const L = LAYERS[li], dir = Math.random() < .5 ? 1 : -1;
-      const nine = Math.random() < .5;
+      const nine = Math.random() < .42;
       let rank, suit;
       if (nine) { rank = '9'; suit = pick(SUITS); }
       else if (Math.random() < .12) { rank = '10'; suit = '♥'; }
@@ -93,7 +93,7 @@ export default {
         c.x += c.vx * dt; c.ph += c.phv * dt; c.fl += c.flv * dt;
         c.y = c.baseY + Math.sin(c.ph) * c.amp;
         c.rot = Math.sin(c.ph * 1.3 + 1) * .3;
-        c.fx = .55 + .45 * Math.abs(Math.cos(c.fl));          // Flattern wie Flügelschlag
+        c.fx = .8 + .2 * Math.abs(Math.cos(c.fl));            // Flattern wie Flügelschlag (Karte bleibt lesbar)
       }
       cards = cards.filter(c => c.x > -60 && c.x < VW + 60);
       for (const f of falling) { f.vy += 900 * dt; f.y += f.vy * dt; f.x += f.vx * dt; f.rot += f.vr * dt; }
@@ -146,15 +146,12 @@ export default {
       }
     }
 
+    /* Nur Tippen: Schuss ins Feld oder „Mischen“ auf dem Knopf. Kein Wischen (ein Wisch begann sonst mit einem Schuss). */
+    const onBundle = (x, y) => x > BUNDLE.x - 6 && x < BUNDLE.x + BUNDLE.w + 6 && y > BUNDLE.y - 8 && y < BUNDLE.y + BUNDLE.h + 8;
     function onPointer(ev) {
-      if (ev.type === 'down') {
-        gesture = { id: ev.id, x: ev.x, y: ev.y, t, done: false };
-        if (Math.hypot(ev.x - BUNDLE.x, ev.y - BUNDLE.y) < BUNDLE.r + 10) { gesture.done = true; if (ammo >= MAG) pops.add(VW / 2, THEKE - 20, 'Schon gemischt.', C.ink); else startReload(); return; }
-        if (ev.y > HUD && ev.y < THEKE - 4) shoot(ev.x, ev.y);
-      } else if (ev.type === 'move' && gesture && !gesture.done && ev.id === gesture.id && ev.pressed !== false) {
-        const dx = ev.x - gesture.x, dy = ev.y - gesture.y;
-        if (dy > 55 && dy > Math.abs(dx) * 1.3 && t - gesture.t < .5) { gesture.done = true; startReload(); }
-      } else if (ev.type === 'up' || ev.type === 'cancel') gesture = null;
+      if (ev.type !== 'down') return;
+      if (onBundle(ev.x, ev.y)) { if (ammo >= MAG) pops.add(VW / 2, THEKE - 20, 'Schon gemischt.', C.ink); else startReload(); return; }
+      if (ev.y > HUD && ev.y < THEKE - 4) shoot(ev.x, ev.y);
     }
 
     /* ---------- Zeichnen ---------- */
@@ -164,10 +161,23 @@ export default {
       ctx.lineTo(VW, bottom); ctx.closePath();
     }
 
+    /* Karte wie core card(), aber das Flattern staucht nur das Blatt, kaum die Schrift,
+       und ferne Karten bekommen eine etwas größere Schrift (lesbar auch auf kleinen Handys). */
+    function flatterKarte(ctx, c, s) {
+      ctx.save(); ctx.scale(s, s);
+      ctx.save(); ctx.scale(c.fx, 1);
+      ctx.fillStyle = '#fff'; ctx.strokeStyle = '#222'; ctx.lineWidth = 1.6; rr(ctx, -20, -28, 40, 56, 6); ctx.fill(); ctx.stroke();
+      ctx.restore();
+      ctx.scale(Math.min(1, c.fx + .12), 1);
+      const fs = Math.max(19, 17 / s);
+      ctx.fillStyle = (c.suit === '♥' || c.suit === '♦') ? '#c0261b' : '#111'; ctx.font = `700 ${fs.toFixed(1)}px Georgia,serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(c.rank + c.suit, 0, 1);
+      ctx.restore();
+    }
     function drawCard(ctx, c) {
       const s = LAYERS[c.li].s;
       ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.rot);
-      ctx.save(); ctx.scale(c.fx, 1); card(ctx, 0, 0, 0, c.rank, c.suit, s); ctx.restore();
+      flatterKarte(ctx, c, s);
       if (c.thorn) { const k = Math.max(s, .8); dorn(ctx, c.thorn.lx - Math.sin(c.thorn.ang) * 16 * k, c.thorn.ly + Math.cos(c.thorn.ang) * 16 * k, 38 * k, c.thorn.ang, 8 * k, WOOD); }
       ctx.restore();
     }
@@ -222,24 +232,29 @@ export default {
       // Neuntöter auf der Theke
       const sa = shootAnim > 0 ? shootAnim / .14 : 0;
       neuntoeter(ctx, BIRD.x, BIRD.y - sa * 3, { scale: BIRD.s, facing: -1, mouth: sa * .7, wing: sa ? -.6 : Math.sin(t * 2) * .15 });
-      // Mischen-Knopf (Dornenbündel)
+      // Mischen-Knopf: Dornenbündel mit Beschriftung, pulsiert rot, wenn das Magazin leer ist
       const empty = ammo <= 0 && reloading <= 0, pulse = empty ? .5 + .5 * Math.sin(t * 10) : 0;
+      const woodL = C.dark ? '#c09469' : WOOD;
+      const { x: kx, y: ky, w: kw, h: kh } = BUNDLE;
       ctx.save();
-      ctx.beginPath(); ctx.arc(BUNDLE.x, BUNDLE.y, BUNDLE.r, 0, Math.PI * 2);
-      ctx.fillStyle = C.bg; ctx.fill(); ctx.lineWidth = 2 + pulse * 2; ctx.strokeStyle = empty ? C.bad : C.line; ctx.stroke();
-      for (let i = -2; i <= 2; i++) dorn(ctx, BUNDLE.x + i * 3, BUNDLE.y + 14, 30, i * .18, 5, WOOD);
-      ctx.fillStyle = C.ch; ctx.fillRect(BUNDLE.x - 9, BUNDLE.y + 2, 18, 4);
-      if (reloading > 0) { ctx.beginPath(); ctx.strokeStyle = C.ch; ctx.lineWidth = 3; ctx.arc(BUNDLE.x, BUNDLE.y, BUNDLE.r - 3, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - reloading / RELOAD)); ctx.stroke(); }
+      rr(ctx, kx, ky, kw, kh, 12); ctx.fillStyle = empty ? C.ch : C.bg; ctx.fill();
+      ctx.lineWidth = 2 + pulse * 2; ctx.strokeStyle = empty ? C.bad : C.muted; ctx.stroke();
+      const bx = kx + kw / 2, col = empty ? '#fff' : woodL;
+      for (let i = -2; i <= 2; i++) dorn(ctx, bx + i * 4, ky + 42, 32, i * .2, 6, col);
+      ctx.fillStyle = empty ? '#fff' : C.ch; ctx.fillRect(bx - 11, ky + 30, 22, 5);
+      ctx.font = `600 12px ${MONO}`; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = empty ? '#fff' : C.ink;
+      ctx.fillText('MISCHEN', bx, ky + kh - 9);
+      if (reloading > 0) { ctx.strokeStyle = C.ch; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(kx + 8, ky + kh - 3); ctx.lineTo(kx + 8 + (kw - 16) * (1 - reloading / RELOAD), ky + kh - 3); ctx.stroke(); }
       ctx.restore();
       // Dornenvorrat
       const sx = shake > 0 ? Math.sin(shake * 70) * 4 : 0;
       ctx.save(); ctx.translate(sx, 0);
       ctx.font = `600 11px ${MONO}`; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = empty ? C.bad : C.muted;
-      ctx.fillText(reloading > 0 ? 'MISCHEN …' : empty ? 'LEER: WISCHEN ODER BÜNDEL' : 'DORNEN', 88, 588);
+      ctx.fillText(reloading > 0 ? 'MISCHEN …' : empty ? '‹ LEER: MISCHEN' : 'DORNEN', 104, 586);
       const shown = reloading > 0 ? Math.floor(MAG * (1 - reloading / RELOAD)) : ammo;
       for (let i = 0; i < MAG; i++) {
-        const x = 96 + i * 25;
-        if (i < shown) dorn(ctx, x, 628, 30, 0, 9, WOOD);
+        const x = 112 + i * 22;
+        if (i < shown) dorn(ctx, x, 628, 30, 0, 9, woodL);
         else { ctx.globalAlpha = .35; dorn(ctx, x, 628, 30, 0, 9, C.muted); ctx.globalAlpha = 1; }
       }
       ctx.restore();
