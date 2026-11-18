@@ -71,8 +71,8 @@ export default {
       const c = cards.find(c => Math.abs(c.x - ev.x) < 30 && Math.abs(c.y - ev.y) < 36);
       if (!c) return;
       cards.splice(cards.indexOf(c), 1);
-      if (c.rank === '9') { score += 9; pops.add(c.x, c.y - 20, '+9', C.ok); api.vibrate(20); }
-      else { const d = isDulle(c.rank, c.suit); lives -= d ? 2 : 1; hurt = .6; api.vibrate(d ? 200 : 80); pops.add(c.x, c.y - 20, d ? 'Die Dulle! −2' : 'Foul', C.bad); }
+      if (c.rank === '9') { score += 9; pops.add(c.x, c.y - 20, '+9', C.ok); api.vibrate(20); api.sfx('neuner'); }
+      else { const d = isDulle(c.rank, c.suit); lives -= d ? 2 : 1; hurt = .6; api.vibrate(d ? 200 : 80); api.sfx(d ? 'dulle' : 'falsch'); pops.add(c.x, c.y - 20, d ? 'Die Dulle! −2' : 'Foul', C.bad); }
     }
 
     // forceEnd(): optional, nur für Tests (beendet sofort mit aktuellem Stand)

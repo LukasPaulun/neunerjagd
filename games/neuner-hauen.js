@@ -91,9 +91,9 @@ export default {
         const n = Math.min(3, streak / 3), bonus = 9 * n;
         score += bonus;
         pops.add(tx, ty - 74, ['Dreier', 'Sechser', 'Neuner-Serie'][n - 1] + `! +${bonus}`, P_GOLD);
-        api.vibrate([15, 30, 15]);
+        api.vibrate([15, 30, 15]); api.sfx('neuner', { pitch: 1.5 }); api.sfx('prompt');
         last = [];
-      } else api.vibrate(15);
+      } else { api.vibrate(15); api.sfx('neuner', { pitch: 1 + (streak % 3) * 0.12 }); }
     }
 
     function foul(h) {
@@ -103,7 +103,7 @@ export default {
       breakStreak();
       shake = dulle ? 0.35 : 0.22; redT = dulle ? 0.45 : 0.2;
       flashes.push({ h, t: 0, col: 'bad' });
-      api.vibrate(dulle ? [90, 50, 150] : 80);
+      api.vibrate(dulle ? [90, 50, 150] : 80); api.sfx(dulle ? 'dulle' : 'falsch');
       pops.add(h.x, h.y - 80, dulle ? 'Die Dulle! −2' : `Foul: ${c.rank}${c.suit} −1`, P_BAD);
       if (dulle) pops.add(h.x, h.y - 102, 'Die haut man nicht.', P_BAD);
     }
@@ -122,6 +122,7 @@ export default {
       t += dt; pops.step(dt);
       if (shake > 0) shake -= dt; if (redT > 0) redT -= dt;
       const k = tune(clamp(t / DAUER, 0, 1));
+      api.audio.setIntensity(t / DAUER);
       spawnT -= dt;
       if (spawnT <= 0) spawnT = spawn(k) ? k.every * rand(0.8, 1.2) : 0.08;
       for (const h of holes) {

@@ -79,7 +79,7 @@ export default {
 
     function startReload() {
       if (reloading > 0 || ammo >= MAG) return;
-      reloading = RELOAD; api.vibrate(15);
+      reloading = RELOAD; api.vibrate(15); api.sfx('mischen');
     }
 
     function step(dt) {
@@ -87,6 +87,7 @@ export default {
       if (shake > 0) shake -= dt; if (shootAnim > 0) shootAnim -= dt;
       if (reloading > 0) { reloading -= dt; if (reloading <= 0) { reloading = 0; ammo = MAG; } }
       const lvl = 1 + t / DAUER * .7;
+      api.audio.setIntensity(t / DAUER);
       for (let li = 0; li < 3; li++) { spawnT[li] -= dt; if (spawnT[li] <= 0) { spawn(li); spawnT[li] = LAYERS[li].gap / lvl * rand(.7, 1.3); } }
       for (const c of cards) {
         c.x += c.vx * dt; c.ph += c.phv * dt; c.fl += c.flv * dt;
@@ -113,12 +114,12 @@ export default {
     function shoot(x, y) {
       if (reloading > 0) return;
       if (ammo <= 0) {
-        shake = .35; api.vibrate([20, 40, 20]);
+        shake = .35; api.vibrate([20, 40, 20]); api.sfx('leer');
         pops.add(x, y - 10, 'Klack. Mischen!', C.bad);
         marks.push({ x, y, a: 1, kind: 'leer' });
         return;
       }
-      ammo--; shots++; shootAnim = .14;
+      ammo--; shots++; shootAnim = .14; api.sfx('schuss');
       tracers.push({ x0: BIRD.x - 30, y0: BIRD.y - 6, x1: x, y1: y, a: 1 });
       // nächste Ebene zuerst; innerhalb der Ebene die Karte, die näher an der Mitte getroffen ist
       let best = null;
@@ -137,10 +138,10 @@ export default {
       const L = LAYERS[c.li];
       if (c.rank === '9') {
         nines++; score += L.pts; marks.push({ x, y, a: 1, kind: 'ok' });
-        pops.add(c.x, c.y - 26, `+${L.pts} aufgespießt`, C.ok); api.vibrate(15);
+        pops.add(c.x, c.y - 26, `+${L.pts} aufgespießt`, C.ok); api.vibrate(15); api.sfx('neuner', { pitch: [1.3, 1.15, 1][c.li] });
       } else {
         const d = isDulle(c.rank, c.suit); fouls++; score -= d ? P_DULLE : P_ANDERE;
-        marks.push({ x, y, a: 1, kind: 'bad' }); api.vibrate(d ? 200 : 60);
+        marks.push({ x, y, a: 1, kind: 'bad' }); api.vibrate(d ? 200 : 60); api.sfx(d ? 'dulle' : 'falsch');
         pops.add(c.x, c.y - 26, d ? `Die Dulle! −${P_DULLE}` : `Unschuldig: ${c.rank}${c.suit} −${P_ANDERE}`, C.bad);
       }
     }

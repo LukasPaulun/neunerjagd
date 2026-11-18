@@ -92,7 +92,7 @@ export default {
       if (dead) return;
       dead = true; deadT = 0; why = reason; shake = .35; flash = 1; bird.hurt = 1.2;
       bird.vy = Math.max(bird.vy, -120);
-      api.vibrate(dulle ? [120, 60, 200] : 120);
+      api.vibrate(dulle ? [120, 60, 200] : 120); api.sfx(dulle ? 'dulle' : 'falsch');
       pops.add(BX + 60, bird.y - 36, dulle ? 'Die Dulle!' : 'Autsch!', C.bad);
     }
     function finish() {
@@ -120,6 +120,7 @@ export default {
         return;
       }
 
+      api.audio.setIntensity(diff(passed));
       const v = started ? speedAt(diff(passed)) : speedAt(0);
       dist += v * dt;
       if (!started) { bird.y = 300 + Math.sin(t * 3) * 8; bird.vy = 0; return; }
@@ -146,7 +147,7 @@ export default {
             if (hitRect(cx, cy, BR, c.x - 15, iy - 21, c.x + 15, iy + 21)) return die('Die Dulle berührt man nicht.', true);
           } else if (!it.taken && Math.hypot(c.x - cx, iy - cy) < 28) {
             it.taken = true; nines++; score += 9; pulse = .5; bird.mouth = 1;
-            pops.add(BX + 70, cy - 30, '+9 aufgespießt', C.ok); api.vibrate(25);
+            pops.add(BX + 70, cy - 30, '+9 aufgespießt', C.ok); api.vibrate(25); api.sfx('neuner');
             let k = Math.ceil((dist + c.x + 60) / THORN); k = Math.max(k, lastThorn + 1); lastThorn = k;
             flying.push({ k, suit: it.suit, p: 0, wx: dist + c.x, wy: iy });
           }
@@ -266,7 +267,7 @@ export default {
     function onPointer(ev) {
       if (ev.type !== 'down' || dead) return;
       started = true;
-      bird.vy = -FLAP; bird.flapT = .22;
+      bird.vy = -FLAP; bird.flapT = .22; api.sfx('flatter');
     }
 
     return { reset, step, draw, onPointer, forceEnd: () => { if (!why) why = 'Testabbruch.'; finish(); } };

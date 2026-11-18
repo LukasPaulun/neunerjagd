@@ -10,7 +10,7 @@
 import M from './vendor/matter.esm.js';
 import { T, KL, KD, FW, FH } from './level.js';
 
-const { Engine, Bodies, Body, Composite, Sleeping } = M;
+const { Engine, Bodies, Body, Composite, Sleeping, Events } = M;
 export const FLOOR = 600, BIRD_R = 13, SUB = 1000 / 180;
 export const FORK = { x: 80, y: 470 };     // Ruheplatz des Vogels in der Astgabel
 export const KRAFT = 0.15;                  // Startgeschwindigkeit je Pixel Auszug (px pro 16,7 ms)
@@ -22,8 +22,15 @@ const FACE = { friction: .8, frictionStatic: 1.2, restitution: .02, density: .00
 
 function engine() { return Engine.create({ enableSleeping: true, positionIterations: 12, velocityIterations: 10 }); }
 
-export function createWelt(level) {
+/* onStoss(v): optional, bei jedem neuen Kontakt mit Relativtempo v > 1.5 (für Klack-Geräusche) */
+export function createWelt(level, onStoss) {
   const eng = engine();
+  if (onStoss) Events.on(eng, 'collisionStart', e => {
+    for (const p of e.pairs) {
+      const a = p.bodyA.velocity, b = p.bodyB.velocity, v = Math.hypot(a.x - b.x, a.y - b.y);
+      if (v > 1.5) { onStoss(v); return; }
+    }
+  });
   const [x0, x1] = level.tisch;
   const statics = [
     Bodies.rectangle((x0 + x1) / 2, T + 7, x1 - x0, 14, { isStatic: true, friction: 1, frictionStatic: 2 }),

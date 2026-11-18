@@ -40,6 +40,7 @@ export default {
 
     function step(dt) {
       t += dt; flap += dt * 14; if (hurt > 0) hurt -= dt;
+      api.audio.setIntensity(t / 120);
       pops.step(dt);
       for (const f of flying) { f.p += dt / 0.75; if (f.p >= 1 && !f.done) { f.done = true; spiked.push({ s: f.s }); nines++; } }
       flying = flying.filter(f => !f.done);
@@ -48,7 +49,7 @@ export default {
         if (!ejected && wuerg < 0.8) {
           ejected = true; const bx = bird.x + (face < 0 ? -40 : 40), by = bird.y - 6;
           kropf.forEach((s, i) => { const g = slot(spiked.length + flying.length); flying.push({ s, x0: bx, y0: by, x1: g.x, y1: g.y, r: g.r, p: -i * 0.07 }); });
-          kropf = []; score += 27; pops.add(bird.x, bird.y - 60, 'Gewölle! +27', C.gold); api.vibrate([40, 40, 40]);
+          kropf = []; score += 27; pops.add(bird.x, bird.y - 60, 'Gewölle! +27', C.gold); api.vibrate([40, 40, 40]); api.sfx('mischen');
         }
         return;
       }
@@ -61,10 +62,10 @@ export default {
         if (!c.dead && Math.hypot(c.cx - bird.x, c.y - bird.y) < 38) {
           c.dead = true;
           if (c.nine) {
-            score += 9; kropf.push(c.suit); pops.add(c.cx, c.y - 20, `+9 geschluckt ${kropf.length}/${KMAX}`, C.ok);
+            score += 9; kropf.push(c.suit); pops.add(c.cx, c.y - 20, `+9 geschluckt ${kropf.length}/${KMAX}`, C.ok); api.sfx('neuner', { pitch: 1 + kropf.length * 0.06 });
             if (kropf.length >= KMAX) { wuerg = 1.5; ejected = false; pops.add(bird.x, bird.y - 90, 'Hrrk…', C.ch); }
           } else {
-            const dulle = c.rank === '10' && c.suit === '♥'; lives -= dulle ? 2 : 1; hurt = 0.6; api.vibrate(dulle ? 200 : 80);
+            const dulle = c.rank === '10' && c.suit === '♥'; lives -= dulle ? 2 : 1; hurt = 0.6; api.vibrate(dulle ? 200 : 80); api.sfx(dulle ? 'dulle' : 'falsch');
             pops.add(c.cx, c.y - 20, dulle ? 'Die Dulle! −2' : 'Foul: ' + c.rank + c.suit, C.bad);
           }
         }

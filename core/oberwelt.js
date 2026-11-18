@@ -5,6 +5,7 @@
 import { neuntoeter } from './draw.js';
 import { C } from './theme.js';
 import * as store from './store.js';
+import * as audio from './audio.js';
 import { clamp, dist, pick } from './util.js';
 import { WW, WH, START, STATIONEN, VEREINSHEIM, FELD, buildWorld, drawGround, schild, laufNeuner } from './oberwelt-welt.js';
 
@@ -125,6 +126,7 @@ export default {
     });
     const cam = camFor(false);
 
+    let hopN = 0;
     let t = 0, pending = null, promptFor = null, dismissed = null, marker = null, panelOpen = false;
     let dragId = null, dragT = 0, dragFrom = null;
     const neun = { x: (FELD.x0 + FELD.x1) / 2, y: (FELD.y0 + FELD.y1) / 2 + 20, tx: 0, ty: 0, wait: 0, run: false, suit: pick(['♣', '♠', '♥', '♦']), facing: 1 };
@@ -136,9 +138,20 @@ export default {
     const liste = mk('a', 'ow-liste', 'Liste'); liste.href = '#/liste'; liste.setAttribute('aria-label', 'Alle Spiele als Liste');
     const hint = mk('div', 'ow-hint', 'Tippen Sie, wohin der Neuntöter hüpfen soll.');
     hint.hidden = !!store.load(KEY, 'hinweis', false);
+    /* iPhone: Lautlos-Schalter stellt Web Audio stumm. Hinweis einmal zeigen (beim Zeigen gemerkt). */
+    const hints = mk('div', 'ow-hints');
+    hints.append(hint);
+    if (audio.isIOS() && !store.load('ton', 'hinweis', false)) {
+      const tonHint = mk('div', 'ow-hint ow-ton');
+      const x = mk('button', null, '×'); x.type = 'button'; x.setAttribute('aria-label', 'Hinweis schließen');
+      tonHint.append(mk('span', null, 'Kein Ton? Lautlos-Schalter am iPhone prüfen.'), x);
+      tonHint.addEventListener('click', () => { tonHint.remove(); });
+      hints.append(tonHint);
+      store.save('ton', 'hinweis', true);
+    }
     const cardEl = mk('div', 'ow-card'); cardEl.hidden = true; cardEl.setAttribute('role', 'dialog');
     const panel = mk('div', 'ow-panel'); panel.hidden = true; panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-label', 'Bestenliste');
-    el.append(liste, hint, cardEl, panel);
+    el.append(liste, hints, cardEl, panel);
 
     const bestText = b => b && b.score ? `${b.score} · ${b.title || '–'}` : 'noch keine Wertung';
 
@@ -155,6 +168,7 @@ export default {
         else openPanel();
       });
       cardEl.append(txt, btn);
+      if (cardEl.hidden) audio.sfx('prompt');
       cardEl.hidden = false;
     }
     function hidePrompt() { if (promptFor) { dismissed = promptFor; promptFor = null; } cardEl.hidden = true; }
@@ -220,8 +234,9 @@ export default {
         if (d <= budget) { bird.x = w.x; bird.y = w.y; budget -= d; bird.hop += d * .1; bird.path.shift(); }
         else { bird.x += dx / d * budget; bird.y += dy / d * budget; bird.hop += budget * .1; budget = 0; }
       }
+      if (bird.moving) { const h = Math.floor(bird.hop / Math.PI); if (h !== hopN) { hopN = h; audio.sfx('hop'); } }
       if (bird.moving && !bird.path.length) {
-        bird.moving = false; bird.hop = 0; savePos();
+        bird.moving = false; bird.hop = 0; hopN = 0; savePos();
         if (pending && dist(bird.x, bird.y, pending.door.x, pending.door.y) < 6) showPrompt(pending);
         pending = null;
       }

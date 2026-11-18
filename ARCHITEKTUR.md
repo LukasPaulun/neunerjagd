@@ -7,7 +7,7 @@ GitHub Pages direkt aus dem Repo-Wurzelverzeichnis (alle Pfade relativ).
 ## Dateien
 
 ```
-index.html            Hülle: Kopfzeile (Titel, Zurück-Knopf), Bühne (Canvas, Overlay, Pause-Knopf, Hub-Container), CSS
+index.html            Hülle: Kopfzeile (Titel, Zurück-Knopf, Lautsprecher), Bühne (Canvas, Overlay, Pause-Knopf, Hub-Container), CSS
 core/main.js          Einstieg: Bühne, Eingabe, Routing, lädt Spiele aus der Registry, Test-Hook
 core/engine.js        Spiel-Laufzeit: Schleife, Overlay Start/Pause/Ende, Bestleistung, rankTitle()
 core/stage.js         VW/VH/HUD, Canvas-Skalierung (devicePixelRatio), toWorld()
@@ -17,6 +17,7 @@ core/draw.js          rr, card, neuntoeter, dorn, dornAst, dornSlot, hintergrund
 core/hud.js           hud, hudBar, hudLabel, hudValue, hudHearts, createPopups
 core/util.js          clamp, lerp, rand, randInt, pick, dist, vibrate
 core/store.js         Bestleistungen und Spielstände (localStorage)
+core/audio.js         Ton: Musik (Walzer im Dorf, Polka im Spiel) und Geräusche, alles Web Audio, Tonmodus
 core/router.js        Hash-Routing
 core/oberwelt.js      Hub: Oberwelt „Stammtischdorf“ (Bewegung, Wegfindung, Kamera, Eingangskarte, Bestenliste)
 core/oberwelt-welt.js Oberwelt: Stationstabelle STATIONEN, Wege, Bäume, Zäune, Bauten (Zeichnen)
@@ -159,6 +160,9 @@ Lauffähige, kommentierte Fassung: `games/_vorlage.js`.
 | `best()` | → `{score, title}` | eigene Bestleistung |
 | `load(key, fallback)` | → JSON-Wert | eigener Speicher, Schlüssel `stammtisch-<id>-<key>` |
 | `save(key, value)` | → void | z. B. Level-Fortschritt (Kartenhaus) |
+| `sfx(name, opts?)` | → void | Geräusch abspielen (Liste unter „Ton“); still, wenn Ton aus oder noch nicht entsperrt |
+| `audio.sfx(name, opts?)` | → void | dasselbe |
+| `audio.setIntensity(x)` | x 0..1 → void | Schwierigkeit fürs Polka-Tempo (bis +18 %); ohne Aufruf steigt es mit der Spielzeit (90 s) |
 
 **Spiele fassen das DOM nicht an** (kein `document`, kein `window`-Listener, keine eigenen
 Elemente). Alles läuft über Canvas, `onPointer` und `api`. Timer nur über `step(dt)` (keine
@@ -246,9 +250,51 @@ Tastatur wird nicht unterstützt.
   - `stammtisch-<id>-<key>` → frei pro Spiel (`api.save/load`)
   - `stammtisch-zuletzt` → id des zuletzt geöffneten Spiels
   - `stammtisch-oberwelt-pos` → `{x, y}` Vogelposition in der Oberwelt, `stammtisch-oberwelt-hinweis` → Hinweis gesehen
+  - `stammtisch-ton` → `'an' | 'effekte' | 'aus'` (Tonmodus), `stammtisch-ton-hinweis` → iPhone-Hinweis gezeigt
 - `core/store.js`: `getBest(id)`, `setBest(id, score, title)` (nur wenn höher, → true),
   `load(id, key, fallback)`, `save(id, key, value)`, `getLast()`, `setLast(id)`. Spiele nutzen
   stattdessen `api.best/load/save`.
+
+## Ton (`core/audio.js`)
+
+Alles wird zur Laufzeit mit der Web Audio API erzeugt: keine Tondateien, keine Bibliothek, nur
+eigene Melodien (Notendaten in `audio.js`). Stil: kleine Wirtshaus-Blasmusik (Akkordeon aus zwei
+verstimmten Sägezähnen mit Tiefpass und Tremolo, Tuba-Bass, Nachschlag-Akkorde, leises Schlagwerk).
+
+- **Entsperren:** Der AudioContext entsteht erst bei der ersten Nutzergeste (`pointerup`,
+  `touchend`, `click`, …, auf `document`), iOS-tauglich. Vorher gewünschte Musik startet dann.
+- **Planer:** `setInterval` (25 ms) plant Noten 0,12 s im Voraus auf `ctx.currentTime`.
+- **Musik:** Kern und Engine steuern sie, Spiele nicht. Hub (`#/`, `#/liste`) → Walzer „Abendschoppen“
+  (F-Dur, 3/4, 104 bpm, 32 Takte, Schleife). Spiel → Polka „Kropfpolka“ (B-Dur, 2/4, 116 bpm,
+  24 Takte), je Spiel-id um einige Halbtöne transponiert, Tempo bis +18 % über `setIntensity`.
+  Start/„Nochmal“ = Polka von vorn, Pause (Knopf oder App-Wechsel) = Musik pausiert, Ende =
+  Musik aus + Tusch (neue Bestleistung) bzw. kurze traurige Posaunenfigur, Verlassen = Musik aus.
+  Bei `visibilitychange` (verborgen) wird der ganze Kontext angehalten.
+- **Geräusche** (`api.sfx(name, opts)`), jedes mit eigener Abklingzeit, global höchstens 48 Stimmen:
+
+| name | wofür | opts |
+|---|---|---|
+| `neuner` | Neuner aufgespießt („Tock“ + Blip) | `pitch` (Serien, Entfernung) |
+| `falsch` | falsche Karte, Aufprall | |
+| `dulle` | Dulle getroffen (empörtes Blech) | |
+| `flatter` | Flügelschlag (Tonhöhe variiert, max. ca. 14/s) | |
+| `schuss` | Dorn abgeschossen | |
+| `leer` | Magazin leer (Klick) | |
+| `mischen` | Nachladen / Karten rascheln | |
+| `spannen` | Schleuder ziehen | `amount` 0..1 |
+| `schleudern` | Schleuder loslassen | |
+| `klack` | Karten stoßen zusammen | `v` Stoßtempo |
+| `hop` | Vogel hüpft im Dorf (sehr leise) | |
+| `tap` | Knopf (DOM-Knöpfe automatisch über `main.js`) | |
+| `prompt` | Eingangskarte erscheint, kleiner Erfolg | |
+| `tusch`, `traurig` | Schlussfiguren (macht die Engine) | |
+
+- **Tonmodus:** Lautsprecher-Knopf oben rechts in der Kopfzeile, Tipp schaltet
+  alles an → nur Effekte → aus (Symbol, `aria-label`, kurzer Schriftzug), gespeichert in `stammtisch-ton`.
+- **iPhone:** iOS stellt Web Audio bei aktivem Lautlos-Schalter stumm. Die Oberwelt zeigt auf
+  iOS-Geräten einmal den Hinweis „Kein Ton? Lautlos-Schalter am iPhone prüfen.“
+- **Test-Hook:** `window.__stammtisch.audio` (`state`, `voices`, `music`, `intensity`, `mode`,
+  `sounds`, `render(name, sekunden, opts)` → `Promise<AudioBuffer>` per OfflineAudioContext).
 
 ## Spiel eintragen
 
@@ -351,7 +397,7 @@ Er gehört der Engine; Spiele benutzen ihn nicht.
    und im eigenen Spiel eine lokale Lösung bauen (z. B. Funktion kopieren und anpassen).
 2. In `games/registry.js` nur die eigene Zeile einkommentieren.
 3. Alle eigenen Dateien: `games/<id>.js`, optional `games/<id>/…`. Nichts anderes anlegen.
-4. Keine Globals, kein DOM, keine externen Ressourcen (CDN, Bilder, Sounds). Bibliotheken nur
+4. Keine Globals, kein DOM, keine externen Ressourcen (CDN, Bilder, Tondateien; Geräusche nur über `api.sfx`). Bibliotheken nur
    vendort im eigenen Ordner (siehe DESIGN.md, Kartenhaus).
 5. Vor dem Commit: `python3 tests/smoke.py <id>` bestanden und die Bilder angesehen
    (hell; Dunkelmodus mit Farben aus `C` prüfen).

@@ -41,8 +41,10 @@ export default {
       else starte(0);
       startLvl = lvl;
     }
+    const stoss = v => api.sfx('klack', { v });   // Karten stoßen zusammen (Abklingzeit im Ton-Kern)
     function starte(i) {
-      lvl = i; welt = createWelt(LEVELS[i]); wuerfe = WUERFE; phase = 'bereit'; pt = 0;
+      api.audio.setIntensity(i / (LEVELS.length - 1));
+      lvl = i; welt = createWelt(LEVELS[i], stoss); wuerfe = WUERFE; phase = 'bereit'; pt = 0;
       zug = null; dots = null; spiked = []; flying = []; banner = 3; dullen = 0; birdAng = 0;
     }
     function ende(text) { api.end({ score, text }); }
@@ -78,8 +80,8 @@ export default {
         const p = x.body.position, unten = x.weg || p.y > LINIE || p.x < -20 || p.x > VW + 20;
         if (!x.out && unten) {
           x.out = true;
-          if (x.k === 'neun') { score += P_NEUN; pops.add(clamp(p.x, 40, VW - 40), Math.min(p.y, T) - 30, `+${P_NEUN} erledigt`, C.ok); api.vibrate(25); }
-          else { score -= P_DULLE; dullen++; pops.add(clamp(p.x, 40, VW - 40), Math.min(p.y, T) - 30, `Die Dulle! −${P_DULLE}`, C.bad); api.vibrate(200); }
+          if (x.k === 'neun') { score += P_NEUN; pops.add(clamp(p.x, 40, VW - 40), Math.min(p.y, T) - 30, `+${P_NEUN} erledigt`, C.ok); api.vibrate(25); api.sfx('neuner'); }
+          else { score -= P_DULLE; dullen++; pops.add(clamp(p.x, 40, VW - 40), Math.min(p.y, T) - 30, `Die Dulle! −${P_DULLE}`, C.bad); api.vibrate(200); api.sfx('dulle'); }
         }
         if (x.out && x.k === 'neun' && !x.spiess) {
           x.outT += dt;
@@ -99,7 +101,7 @@ export default {
         bilanz = { n, bonus, dullen };
         frei = Math.max(frei, Math.min(LEVELS.length, lvl + 2)); api.save('frei', frei);
         if (lvl === LEVELS.length - 1) { phase = 'fertig'; ende(gesamtText('Alle Häuser abgerissen. Der Gegenverein ist aufgelöst.')); return; }
-        phase = 'fertig'; pt = 0; api.vibrate([30, 40, 30]);
+        phase = 'fertig'; pt = 0; api.vibrate([30, 40, 30]); api.sfx('prompt');
       } else if (wuerfe > 0) { phase = 'bereit'; pt = 0; }
       else ende(gesamtText(`Haus ${lvl + 1} steht noch, ${offen()} Neuner ${offen() === 1 ? 'hält' : 'halten'} die Stellung.`));
     }
@@ -109,29 +111,30 @@ export default {
       if (ev.pointer === 'mouse' && ev.type === 'move' && !ev.pressed) return;
       if (phase === 'wahl') { if (ev.type === 'down') wahlTipp(ev); return; }
       if (phase === 'fertig') {
-        if (ev.type === 'down' && pt > .5 && ev.x > BTN.x - 10 && ev.x < BTN.x + BTN.w + 10 && ev.y > BTN.y - 10 && ev.y < BTN.y + BTN.h + 10) starte(lvl + 1);
+        if (ev.type === 'down' && pt > .5 && ev.x > BTN.x - 10 && ev.x < BTN.x + BTN.w + 10 && ev.y > BTN.y - 10 && ev.y < BTN.y + BTN.h + 10) { api.sfx('tap'); starte(lvl + 1); }
         return;
       }
       if (phase !== 'bereit') return;
       if (ev.type === 'down') {
         // großzügig: irgendwo links unten anfassen (der Finger muss den Vogel nicht verdecken)
-        if (ev.x < 170 && ev.y > HUD + 120) { zug = { id: ev.id, fx: ev.x, fy: ev.y, dx: 0, dy: 0 }; dots = null; }
+        if (ev.x < 170 && ev.y > HUD + 120) { zug = { id: ev.id, fx: ev.x, fy: ev.y, dx: 0, dy: 0, ton: 0 }; dots = null; }
       } else if (zug && ev.id === zug.id) {
         if (ev.type === 'move') {
           let dx = ev.x - zug.fx, dy = ev.y - zug.fy; const l = Math.hypot(dx, dy);
           if (l > MAXZUG) { dx *= MAXZUG / l; dy *= MAXZUG / l; }
           zug.dx = dx; zug.dy = dy;
           dots = l > 12 ? vorschau(FORK.x + dx, FORK.y + dy, -dx * KRAFT, -dy * KRAFT) : null;
+          const lz = Math.min(l, MAXZUG); if (Math.abs(lz - zug.ton) > 6) { zug.ton = lz; api.sfx('spannen', { amount: lz / MAXZUG }); }
         } else if (ev.type === 'up' && Math.hypot(zug.dx, zug.dy) > 12) {
           welt.wirf(FORK.x + zug.dx, FORK.y + zug.dy, -zug.dx * KRAFT, -zug.dy * KRAFT);
           birdAng = Math.atan2(-zug.dy, -zug.dx);
-          wuerfe--; phase = 'flug'; pt = 0; ruhT = 0; zug = null; dots = null; api.vibrate(15);
+          wuerfe--; phase = 'flug'; pt = 0; ruhT = 0; zug = null; dots = null; api.vibrate(15); api.sfx('schleudern');
         } else { zug = null; dots = null; }
       }
     }
     const wahlKnopf = i => ({ x: 34 + (i % 2) * 150, y: 210 + (i / 2 | 0) * 72, w: 142, h: 60 });
     function wahlTipp(ev) {
-      for (let i = 0; i < frei; i++) { const k = wahlKnopf(i); if (ev.x > k.x && ev.x < k.x + k.w && ev.y > k.y && ev.y < k.y + k.h) { startLvl = i; starte(i); return; } }
+      for (let i = 0; i < frei; i++) { const k = wahlKnopf(i); if (ev.x > k.x && ev.x < k.x + k.w && ev.y > k.y && ev.y < k.y + k.h) { startLvl = i; api.sfx('tap'); starte(i); return; } }
     }
 
     /* ---------- Zeichnen ---------- */
