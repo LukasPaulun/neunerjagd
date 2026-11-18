@@ -7,8 +7,19 @@
      neunerjagd-best            Altschlüssel (Zahl) der Neunerjagd, wird weiter gelesen und geschrieben */
 const LEGACY = { neunerjagd: 'neunerjagd-best' };
 
-const get = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
-const set = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
+/* Wirft localStorage (gesperrt, privater Modus) oder schlägt das Schreiben fehl, gilt der Wert
+   trotzdem für diese Sitzung: Kopie im Speicher (Modul-Variable), zusätzlich sessionStorage. */
+const mem = new Map();
+function get(k) {
+  if (mem.has(k)) return mem.get(k);
+  try { const v = localStorage.getItem(k); if (v != null) return v; } catch (e) {}
+  try { return sessionStorage.getItem(k); } catch (e) { return null; }
+}
+function set(k, v) {
+  mem.set(k, v);
+  try { localStorage.setItem(k, v); return; } catch (e) {}
+  try { sessionStorage.setItem(k, v); } catch (e) {}
+}
 
 /* -> {score, title}; score 0 und title '' wenn noch nichts gespeichert. */
 export function getBest(id) {

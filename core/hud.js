@@ -31,15 +31,21 @@ export function hud(ctx, fields) {
 }
 
 /* Schwebende Texte ("+9", "Foul"). Pro Spiel eine Instanz:
-   const pops = createPopups(); pops.add(x, y, '+9', C.ok); in step: pops.step(dt); in draw: pops.draw(ctx) */
-export function createPopups() {
+   const pops = createPopups(); pops.add(x, y, '+9', C.ok); in step: pops.step(dt); in draw: pops.draw(ctx)
+   o.outline: Farbe eines Konturrands (für Text auf unruhigem Grund, z. B. Holz) */
+export function createPopups(o = {}) {
   let list = [];
   return {
     add(x, y, txt, col) { list.push({ x: Math.max(90, Math.min(VW - 90, x)), y, txt, col: col || C.ink, a: 1 }); },
     step(dt) { for (const p of list) { p.y -= 36 * dt; p.a -= dt * 0.9; } list = list.filter(p => p.a > 0); },
     draw(ctx) {
       ctx.save(); ctx.font = `700 16px ${MONO}`; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-      for (const p of list) { ctx.globalAlpha = Math.max(0, p.a); ctx.fillStyle = p.col; ctx.fillText(p.txt, p.x, p.y); }
+      if (o.outline) { ctx.strokeStyle = o.outline; ctx.lineWidth = 4; ctx.lineJoin = 'round'; }
+      for (const p of list) {
+        ctx.globalAlpha = Math.max(0, p.a);
+        if (o.outline) ctx.strokeText(p.txt, p.x, p.y);
+        ctx.fillStyle = p.col; ctx.fillText(p.txt, p.x, p.y);
+      }
       ctx.restore();
     },
     clear() { list = []; },

@@ -13,6 +13,15 @@ export function rankTitle(def, score) {
   return t;
 }
 
+/* Geschützte Leerzeichen, damit Zahl und Wort nicht getrennt umbrechen („+9“, „−18“, „3 Leben“). */
+const NB = '\u00a0';
+export function nobreak(s) {
+  return String(s)
+    .replace(/ (?=[+−-]?\d)/g, NB)                                   // Wort +9 / Wort 18
+    .replace(/(\d[\d.,]*\s?%?) (?=[A-Za-zÄÖÜäöüß(])/g, (m, a) => a + NB); // 3 Leben, 90 Sekunden
+}
+const END_DELAY = 800;   // ms: Knopf am Ende nimmt erst danach Eingaben an (wer noch tippt, startet nicht versehentlich neu)
+
 /* sh = { ctx, ov: {root, t, p, r, btn, best}, pauseB }  ->  Bildschirm-Objekt für main.js */
 export function mountGame(def, sh) {
   const { ctx, ov, pauseB } = sh;
@@ -20,16 +29,18 @@ export function mountGame(def, sh) {
   /* Ton: Polka je Spiel leicht anders transponiert; Tempo steigt mit der Spielzeit,
      bis das Spiel selbst api.audio.setIntensity() aufruft. */
   const tonart = [0, 2, -2, 3, -3][[...def.id].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % 5];
-  let playT = 0, ownIntensity = false;
+  let playT = 0, ownIntensity = false, btnT = 0;
 
   const bestLine = () => { const b = store.getBest(def.id).score; ov.best.textContent = b ? `Bestleistung auf diesem Gerät: ${b}` : ''; };
   const setRules = lines => {
     ov.r.replaceChildren();
-    (lines || []).forEach((l, i) => { if (i) ov.r.append(document.createElement('br')); ov.r.append(l); });
+    (lines || []).forEach((l, i) => { if (i) ov.r.append(document.createElement('br')); ov.r.append(nobreak(l)); });
     ov.r.hidden = !lines || !lines.length;
   };
-  const showOverlay = (title, text, rules, btn) => {
-    ov.t.textContent = title; ov.p.textContent = text; setRules(rules); ov.btn.textContent = btn;
+  const showOverlay = (title, text, rules, btn, delay = 0) => {
+    ov.t.textContent = title; ov.p.textContent = nobreak(text); setRules(rules); ov.btn.textContent = btn;
+    clearTimeout(btnT); ov.btn.disabled = delay > 0;
+    if (delay > 0) btnT = setTimeout(() => { ov.btn.disabled = false; }, delay);
     pauseB.hidden = true; ov.root.hidden = false;
   };
 
@@ -46,7 +57,7 @@ export function mountGame(def, sh) {
   function run() { state = 'play'; ov.root.hidden = true; pauseB.hidden = false; last = performance.now(); raf = requestAnimationFrame(loop); }
   function start() {
     inst.reset(); playT = 0; audio.setIntensity(0);
-    audio.playMusic('polka', { tonart, restart: true });
+    audio.playMusic('polka', { tonart, restart: true, place: def.id });
     run();
   }
   function pause() {
@@ -61,7 +72,7 @@ export function mountGame(def, sh) {
     const title = res.title || rankTitle(def, score) || def.name;
     const rekord = store.setBest(def.id, score, title);
     audio.stopMusic(); audio.sfx(rekord ? 'tusch' : 'traurig');
-    showOverlay(title, res.text || `${score} Punkte.`, null, def.againLabel || 'Nochmal');
+    showOverlay(title, res.text || `${score} Punkte.`, null, def.againLabel || 'Nochmal', END_DELAY);
     bestLine(); paint();
   }
 
@@ -81,7 +92,7 @@ export function mountGame(def, sh) {
   };
   inst = def.create(api);
   inst.reset();
-  audio.setIntensity(0); audio.playMusic('polka', { tonart });
+  audio.setIntensity(0); audio.playMusic('polka', { tonart, place: def.id });
   showOverlay(def.name, def.intro || '', def.rules, def.startLabel || 'Start');
   bestLine();
   paint();
@@ -90,10 +101,10 @@ export function mountGame(def, sh) {
     kind: 'spiel', def,
     draw: paint,
     onPointer(ev) { if (state === 'play' && inst.onPointer) inst.onPointer(ev); },
-    onButton() { if (state === 'pause') { audio.resumeMusic(); run(); } else if (state !== 'play') start(); },
+    onButton() { if (ov.btn.disabled) return; if (state === 'pause') { audio.resumeMusic(); run(); } else if (state !== 'play') start(); },
     onPause: pause,
     onHidden: pause,
-    unmount() { audio.stopMusic(); state = 'dead'; cancelAnimationFrame(raf); pauseB.hidden = true; ov.root.hidden = true; try { inst.destroy && inst.destroy(); } catch (e) { console.error(e); } },
+    unmount() { clearTimeout(btnT); ov.btn.disabled = false; audio.stopMusic(); state = 'dead'; cancelAnimationFrame(raf); pauseB.hidden = true; ov.root.hidden = true; try { inst.destroy && inst.destroy(); } catch (e) { console.error(e); } },
     /* nur für Tests */
     debug: {
       get state() { return state; }, get frames() { return frames; }, test: def.test || {},

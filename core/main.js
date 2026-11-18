@@ -73,7 +73,27 @@ const ready = Promise.all(REGISTRY.map(id => loadGame(id).catch(err => { console
 function setHeader(title, inGame) {
   titleEl.textContent = title; document.title = title;
   eyebrow.hidden = inGame; back.hidden = !inGame;
+  fitTitle();
 }
+/* Kopfzeilen-Titel: Schrift verkleinern, bis er in den verfügbaren Platz passt (statt „Der Stammti…“) */
+function fitTitle() {
+  titleEl.style.fontSize = '';
+  let f = parseFloat(getComputedStyle(titleEl).fontSize) || 34;
+  while (titleEl.scrollWidth > titleEl.clientWidth + 0.5 && f > 16) { f -= 1; titleEl.style.fontSize = f + 'px'; }
+}
+addEventListener('resize', fitTitle);
+try { document.fonts && document.fonts.ready.then(fitTitle); } catch (e) {}
+
+/* Querformat auf Touch-Handys: Hinweis „hochkant halten“ zeigen, laufendes Spiel pausieren */
+const quer = $('quer');
+const querMQ = window.matchMedia ? matchMedia('(orientation: landscape) and (pointer: coarse) and (max-height: 600px)') : null;
+function checkQuer() {
+  const q = !!(querMQ && querMQ.matches);
+  quer.hidden = !q;
+  if (q && current && current.onHidden) current.onHidden();
+}
+if (querMQ) { querMQ.addEventListener ? querMQ.addEventListener('change', checkQuer) : querMQ.addListener(checkQuer); }
+addEventListener('orientationchange', () => setTimeout(checkQuer, 50));
 
 async function route(r) {
   const my = ++token;
@@ -126,4 +146,4 @@ window.__stammtisch = {
 };
 
 onRoute(route);
-route(parse());
+route(parse()).then(checkQuer);

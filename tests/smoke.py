@@ -18,6 +18,7 @@ from playwright.sync_api import sync_playwright
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, 'tests', 'out')
 IGNORE = ('fonts.googleapis.com', 'fonts.gstatic.com')  # Schriften fehlen evtl. offline – kein Spielfehler
+OPTIONAL = ('/musik/',)  # Musikdateien und credits.json sind optional (404 = erzeugte Musik), kein Fehler
 
 
 def free_port():
@@ -38,12 +39,16 @@ class Run:
         url = (m.location or {}).get('url', '')
         if any(h in url or h in m.text for h in IGNORE):
             self.notes.append('Schrift nicht geladen (ignoriert)')
+        elif any(h in url for h in OPTIONAL):
+            pass
         else:
             self.errors.append(f'console: {m.text} @ {url}')
 
     def _reqfail(self, r):
         if any(h in r.url for h in IGNORE):
             self.notes.append('Schrift nicht geladen (ignoriert)')
+        elif any(h in r.url for h in OPTIONAL):
+            pass
         else:
             self.errors.append(f'request failed: {r.url}')
 
