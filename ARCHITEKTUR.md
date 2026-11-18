@@ -297,15 +297,15 @@ leises Schlagwerk).
 | Dorf (`#/`, `#/liste`) | `musik/dorf.mp3` | Walzer |
 | Spiel `<id>` | `musik/<id>.mp3`, dann `musik/spiel.mp3` | Polka |
 
-  Gestreamt über ein `HTMLAudioElement` (`MediaElementSource`) in den Musik-Regler: Tonmodus
-  „Nur Effekte“/„Aus“ macht sie stumm, Pause hält sie an, App-Wechsel ebenso. Geladen wird erst,
-  wenn der Ort Musik braucht, und nur dessen Datei (`preload="auto"`, Start bei `canplay`). Schleife
-  über `loop`. Orts­wechsel, Start und Ende blenden 0,3 s aus/ein. Tempo steigt mit `setIntensity`
-  um höchstens 5 % (`playbackRate`, Tonhöhe bleibt). Antwortet der Server mit 404 oder ist die Datei
-  nicht abspielbar, gilt das erzeugte Lied (Ergebnis pro Datei für die Sitzung gemerkt; nach
-  10 s ohne Ladeerfolg ebenfalls Rückfall, dann neuer Versuch beim nächsten Ortswechsel).
-  Empfehlung: MP3, 96–128 kbit/s, 2–4 min, Anfang und Ende schleifenfähig, Pegel ca. −14 LUFS
-  (`FILE_GAIN` in `audio.js` gleicht den Pegel an die Geräusche an). Rechte klären!
+  Abgespielt über **ein einziges** `HTMLAudioElement` direkt, **nicht** durch Web Audio
+  (`MediaElementSource` ruckelt in iOS-Safari, sobald Effekte laufen). Folgen: kein Tempo-Anstieg,
+  keine Lautstärke-Regelung (iOS ignoriert `volume`), keine Überblendung. Tonmodus „Nur Effekte“/„Aus“
+  setzt `muted`, Pause und App-Wechsel halten an. Das Element wird bei der ersten Berührung
+  freigeschaltet und wechselt danach nur die Quelle; jede Berührung startet eine blockierte Wiedergabe
+  erneut. Antwortet der Server mit 404 oder ist die Datei nicht abspielbar, gilt das erzeugte Lied
+  (pro Datei für die Sitzung gemerkt; nach 10 s ohne Ladeerfolg ebenfalls Rückfall).
+  Dateien: MP3, 96 kbit/s, **Pegel schon fertig gemischt, ca. −25 LUFS** (`ffmpeg -af loudnorm=I=-25:TP=-3`),
+  damit die Musik unter den Effekten liegt. Rechte klären!
 - **Mitwirkende:** `musik/credits.json` = JSON-Array von Textzeilen (höchstens 12), z. B.
   `["Musik: „Abendschoppen“ – Kapelle XY (CC BY 4.0)"]`. Steht unten in der Bestenliste
   (Vereinsheim), wenn die Datei da ist; sonst nichts. Fehlende Dateien unter `musik/` sind

@@ -325,6 +325,7 @@ function applyMode() {
   const t = ctx.currentTime;
   G.music.gain.setTargetAtTime(mode === 'an' ? VOL.music : 0, t, 0.03);
   G.sfx.gain.setTargetAtTime(mode === 'aus' ? 0 : VOL.sfx, t, 0.03);
+  if (fel) fel.muted = mode !== 'an';
 }
 
 function startTimer() { if (!timer) timer = setInterval(tick, TICK_MS); }
@@ -353,86 +354,60 @@ function silence(s) {
 /* ---------------- Musik aus Dateien (optional) ----------------
    Liegt für den Ort eine Aufnahme in musik/, spielt sie statt des erzeugten Lieds:
    Dorf: musik/dorf.mp3. Spiel <id>: musik/<id>.mp3, sonst musik/spiel.mp3. Fehlt die Datei (404)
-   oder lädt sie nicht, gilt das erzeugte Lied (Walzer bzw. Polka). Gestreamt über ein
-   HTMLAudioElement (MediaElementSource) in den Musik-Regler, also stumm bei „Nur Effekte“/„Aus“.
-   Geladen wird erst, wenn der Ort Musik braucht, und nur dessen Datei. Ergebnis pro URL gemerkt. */
-const FILE_GAIN = 2.0;          // Pegel der Aufnahmen relativ zum Musik-Regler (VOL.music)
-const FADE = 0.3;               // s Ein-/Ausblenden bei Ortswechsel, Start und Pause
-const FILE_SPEEDUP = 0.05;      // Aufnahmen höchstens 5 % schneller (setIntensity)
+   oder lädt sie nicht, gilt das erzeugte Lied (Walzer bzw. Polka).
+   Die Aufnahme läuft DIREKT über ein HTMLAudioElement, nicht durch Web Audio: In iOS-Safari
+   ruckelt MediaElementSource, sobald Effekte und Grafik das Audio-System belasten. Deshalb auch
+   kein Tempo-Ändern und keine Lautstärke-Regelung (iOS ignoriert el.volume): Die Dateien sind
+   schon auf den passenden Pegel unter den Effekten gemischt (ca. −25 LUFS).
+   Ein einziges Element für alle Orte: iOS gibt es beim ersten Abspielen in einer Berührung frei,
+   danach darf es auch die Quelle wechseln. „Nur Effekte“/„Aus“ schalten es stumm (el.muted). */
 const LOAD_TIMEOUT = 10000;     // ms; danach erzeugte Musik (die Datei wird beim nächsten Mal neu versucht)
-const tracks = new Map();       // url -> { url, el, p: Promise<track|null>, node?, gain?, tok }
+const badFiles = new Set();     // URLs, die nicht laden (404/Dekodierfehler)
+let fel = null, loadTo = 0;
 
 function fileCandidates(place) {
   if (place === 'dorf') return ['musik/dorf.mp3'];
   return (place && place !== 'spiel' ? [`musik/${place}.mp3`] : []).concat('musik/spiel.mp3');
 }
-function loadTrack(url) {
-  const known = tracks.get(url); if (known) return known.p;
-  const el = new Audio(), tr = { url, el, tok: 0 };
-  el.crossOrigin = 'anonymous';   // Vorschau-Hoster leiten auf raw.githubusercontent.com um: ohne CORS liefert Web Audio nur Stille
-  el.preload = 'auto'; el.loop = true;
-  tr.p = new Promise(res => {
-    let done = false, to = 0, keep = true;      // keep: 404/Dekodierfehler bleibt gemerkt, Zeitüberschreitung nicht
-    const fin = ok => {
-      if (done) return; done = true; clearTimeout(to);
-      if (!ok) { if (!keep) tracks.delete(url); el.removeAttribute('src'); try { el.load(); } catch (e) {} }
-      res(ok ? tr : null);
-    };
-    el.addEventListener('canplay', () => fin(true), { once: true });
-    el.addEventListener('error', () => fin(false), { once: true });
-    to = setTimeout(() => { keep = false; fin(false); }, LOAD_TIMEOUT);
-    el.src = url;
-  });
-  tracks.set(url, tr);
-  return tr.p;
+function fileEl() {
+  if (!fel) { fel = new Audio(); fel.preload = 'auto'; fel.loop = true; fel.setAttribute('playsinline', ''); }
+  return fel;
 }
-async function findTrack(place) {
-  for (const url of fileCandidates(place)) { const tr = await loadTrack(url); if (tr) return tr; }
-  return null;
-}
-const fileRate = () => 1 + FILE_SPEEDUP * intensity;
-function fileFade(tr, to, dur) {
-  const g = tr.gain.gain, now = ctx.currentTime;
-  g.cancelScheduledValues(now); g.setValueAtTime(g.value, now); g.linearRampToValueAtTime(to, now + dur);
-}
-function filePlay(tr) {
-  const p = tr.el.play(); if (p && p.catch) p.catch(() => {});
-  fileFade(tr, FILE_GAIN, FADE); tr.tok++;
-}
-function fileStop(tr, dur = FADE) {           // ausblenden, danach anhalten (falls nicht wieder gestartet)
-  if (!tr.gain) return;
-  fileFade(tr, 0, dur);
-  const tok = ++tr.tok;
-  setTimeout(() => { if (tr.tok === tok) tr.el.pause(); }, dur * 1000 + 30);
-}
-function startFile(tr, w) {
-  if (!tr.node) { tr.node = ctx.createMediaElementSource(tr.el); tr.gain = ctx.createGain(); tr.gain.gain.value = 0; tr.node.connect(tr.gain); tr.gain.connect(G.music); }
-  seq = { kind: 'file', tr, want: w, paused: !!w.paused };
-  try { tr.el.currentTime = 0; } catch (e) {}
-  tr.el.playbackRate = fileRate();
-  if (!seq.paused && !document.hidden) filePlay(tr);
+function filePlay() { if (!fel) return; fel.muted = mode !== 'an'; const p = fel.play(); if (p && p.catch) p.catch(() => {}); }
+function fileStop() { if (fel) fel.pause(); }
+function fileTry(w, list) {
+  const url = list.find(u => !badFiles.has(u));
+  if (!url) { startSynth(w); return; }
+  const e = fileEl(), my = { kind: 'file', want: w, url, paused: !!w.paused };
+  seq = my;
+  clearTimeout(loadTo);
+  e.onerror = () => {
+    if (seq !== my) return;
+    clearTimeout(loadTo); badFiles.add(url); fileTry(w, list.filter(u => u !== url));
+  };
+  loadTo = setTimeout(() => {
+    if (seq !== my || e.readyState >= 2) return;
+    e.onerror = null; e.pause(); startSynth(w);
+  }, LOAD_TIMEOUT);
+  const abs = new URL(url, location.href).href;
+  if (e.src !== abs) e.src = url; else { try { e.currentTime = 0; } catch (x) {} }
+  if (!my.paused && !document.hidden) filePlay();
 }
 function startSynth(w) {
   seq = { kind: 'synth', want: w, S: SONGS[w.name], tr: w.tr, step: 0, next: ctx.currentTime + 0.1, paused: !!w.paused, set: new Set() };
   if (!seq.paused) startTimer();
 }
-/* Laufende Musik beenden (Synth: kurz ausblenden; Datei: FADE ausblenden) */
+/* Laufende Musik beenden (Synth: kurz ausblenden; Datei: anhalten) */
 function stopCurrent() {
   if (!seq) return;
   if (seq.kind === 'synth') silence(seq);
-  else if (seq.kind === 'file') fileStop(seq.tr);
+  else if (seq.kind === 'file') fileStop();
   seq = null; stopTimer();
 }
 
 function startSeq() {
   if (!want || !G) return;
-  const w = want;
-  seq = { kind: 'wait', want: w, paused: !!w.paused };     // Platzhalter, bis klar ist: Datei oder Synth
-  findTrack(w.place).then(tr => {
-    if (!seq || seq.want !== w || want !== w) return;      // Ort inzwischen gewechselt
-    const paused = seq.paused; w.paused = paused;
-    if (tr) startFile(tr, w); else startSynth(w);
-  });
+  fileTry(want, fileCandidates(want.place));
 }
 
 /* Erste Nutzergeste: Kontext erzeugen bzw. fortsetzen. Danach wartende Musik starten. */
@@ -446,16 +421,18 @@ export function unlock() {
   }
   if (ctx.state !== 'running') { const p = ctx.resume(); if (p && p.catch) p.catch(() => {}); }
   if (ctx.state === 'running' && want && !seq) startSeq();
+  // iOS: ein außerhalb einer Berührung gestartetes play() wird abgelehnt; jede Berührung versucht es erneut
+  if (seq && seq.kind === 'file' && !seq.paused && fel && fel.paused && !document.hidden) filePlay();
 }
 
 if (typeof document !== 'undefined') {
   for (const ev of ['pointerup', 'touchend', 'mousedown', 'click', 'keydown']) document.addEventListener(ev, unlock, { capture: true, passive: true });
   document.addEventListener('visibilitychange', () => {
     if (!ctx) return;
-    if (document.hidden) { if (ctx.state === 'running') ctx.suspend().catch(() => {}); if (seq && seq.kind === 'file') seq.tr.el.pause(); }
+    if (document.hidden) { if (ctx.state === 'running') ctx.suspend().catch(() => {}); if (seq && seq.kind === 'file') fileStop(); }
     else {
       if (ctx.state !== 'running') ctx.resume().catch(() => {});
-      if (seq && seq.kind === 'file' && !seq.paused) filePlay(seq.tr);
+      if (seq && seq.kind === 'file' && !seq.paused) filePlay();
     }
   });
 }
@@ -476,19 +453,18 @@ export function pauseMusic() {
   if (!seq || seq.paused) return;
   seq.paused = true;
   if (seq.kind === 'synth') { silence(seq); stopTimer(); }
-  else if (seq.kind === 'file') fileStop(seq.tr, 0.15);
+  else if (seq.kind === 'file') fileStop();
 }
 export function resumeMusic() {
   if (want) want.paused = false;
   if (!seq || !seq.paused) return;
   seq.paused = false;
   if (seq.kind === 'synth') { seq.next = ctx.currentTime + 0.1; startTimer(); }
-  else if (seq.kind === 'file') filePlay(seq.tr);
+  else if (seq.kind === 'file') filePlay();
 }
 /* 0..1: Polka wird bis zu 18 % schneller, Aufnahmen bis zu 5 % */
 export function setIntensity(x) {
   intensity = x > 1 ? 1 : x > 0 ? x : 0;
-  if (seq && seq.kind === 'file') { const r = fileRate(); if (Math.abs(seq.tr.el.playbackRate - r) > 0.002) seq.tr.el.playbackRate = r; }
 }
 
 /* Mitwirkende der Aufnahmen: musik/credits.json (Array von Zeilen), sonst []. Einmal geladen. */
@@ -534,7 +510,7 @@ export const debug = {
   get voices() { return G ? G.voices : 0; },
   get music() {
     if (!seq) return want ? { name: want.name, place: want.place, wartet: true } : null;
-    if (seq.kind === 'file') { const e = seq.tr.el; return { name: seq.want.name, place: seq.want.place, file: seq.tr.url, paused: seq.paused, time: e.currentTime, playing: !e.paused, rate: e.playbackRate, loop: e.loop, gain: seq.tr.gain.gain.value }; }
+    if (seq.kind === 'file') { const e = fel; return { name: seq.want.name, place: seq.want.place, file: seq.url, paused: seq.paused, time: e.currentTime, playing: !e.paused, muted: e.muted, loop: e.loop }; }
     if (seq.kind === 'wait') return { name: seq.want.name, place: seq.want.place, sucht: true, paused: seq.paused };
     return { name: seq.S.name, place: seq.want.place, step: seq.step, paused: seq.paused, tonart: seq.tr };
   },
