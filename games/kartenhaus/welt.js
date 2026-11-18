@@ -12,12 +12,20 @@ import { T, KL, KD, FW, FH } from './level.js';
 
 const { Engine, Bodies, Body, Composite, Sleeping, Events } = M;
 export const FLOOR = 600, BIRD_R = 13, SUB = 1000 / 180;
-export const FORK = { x: 80, y: 470 };     // Ruheplatz des Vogels in der Astgabel
-export const KRAFT = 0.15;                  // Startgeschwindigkeit je Pixel Auszug (px pro 16,7 ms)
+export const FORK = { x: 126, y: 470 };    // Ruheplatz des Vogels in der Astgabel
+export const ZUGWEG = .6;                   // Vogel wandert beim Ziehen um diesen Anteil des Auszugs zurück (Abwurfpunkt)
 export const MAXZUG = 78;
+/* Abwurf: Tempo (px pro 16,7 ms) wächst linear mit dem Auszug von VMIN·VMAX (kurz gezogen) bis VMAX
+   (voll gezogen). So reichen auch kurze Züge bis zum Tisch (sanfte Lobs), und der volle Zug ist kein
+   Alles-oder-nichts. Vogel leicht genug, dass ein Treffer ein Haus nicht ganz umwirft. */
+export const TUNE = { vmax: 11, vmin: 0.55, dichte: 0.003, haft: 0.8, reib: 0.6 };   // haft/reib: Haft-/Gleitreibung der Hauskarten
+export function abschuss(dx, dy) {
+  const l = Math.hypot(dx, dy) || 1, v = TUNE.vmax * (TUNE.vmin + (1 - TUNE.vmin) * Math.min(1, l / MAXZUG));
+  return { vx: -dx / l * v, vy: -dy / l * v };
+}
 Sleeping._motionSleepThreshold = 0.05;      // erst bei fast völligem Stillstand einschlafen
 
-const KARTE = { friction: .9, frictionStatic: 1.5, restitution: .02, density: .0012 };
+const KARTE = { restitution: .02, density: .0012 };   // Reibung aus TUNE
 const FACE = { friction: .8, frictionStatic: 1.2, restitution: .02, density: .001 };
 
 function engine() { return Engine.create({ enableSleeping: true, positionIterations: 12, velocityIterations: 10 }); }
@@ -38,7 +46,7 @@ export function createWelt(level, onStoss) {
   ];
   const teile = level.teile.map(p => {
     const body = p.k === 'karte'
-      ? Bodies.rectangle(p.x, p.y, KL, KD, { ...KARTE, angle: p.a })
+      ? Bodies.rectangle(p.x, p.y, KL, KD, { ...KARTE, friction: TUNE.reib, frictionStatic: TUNE.haft, angle: p.a })
       : Bodies.rectangle(p.x, p.y, FW, FH, { ...FACE });
     return { k: p.k, suit: p.suit || '♥', body, out: false, outT: 0, weg: false };
   });
@@ -74,7 +82,7 @@ export function createWelt(level, onStoss) {
     entferne(t) { if (t.weg) return; t.weg = true; Composite.remove(eng.world, t.body); },
     wirf(x, y, vx, vy) {
       if (bird) Composite.remove(eng.world, bird);
-      bird = Bodies.circle(x, y, BIRD_R, { density: .004, restitution: .25, friction: .5, frictionAir: .004 });
+      bird = Bodies.circle(x, y, BIRD_R, { density: TUNE.dichte, restitution: .25, friction: .5, frictionAir: .004 });
       Composite.add(eng.world, bird);
       Body.setVelocity(bird, { x: vx, y: vy });
     },

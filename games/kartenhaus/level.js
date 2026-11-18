@@ -40,22 +40,22 @@ export const LEVELS = [
     const b = bau(); const y1 = b.zelle(245, T), y2 = b.zelle(295, T); b.neun(245, y1, '♠'); b.neun(295, y2, '♥');
     return { name: 'Erster Stock', text: 'Zwei Neuner auf dem Dach. Holen Sie sie runter.', tisch: [190, 350], teile: b.teile };
   })(),
-  (() => { // 3: zwei Stockwerke, Neuner drinnen und auf dem Dach
-    const b = bau(); let y = b.zelle(285, T); b.neun(285, y, '♦'); y = b.zelle(285, y); b.neun(285, y, '♣');
-    b.zelt(215, T);
-    return { name: 'Zweistöckig', text: 'Die Neuner wohnen jetzt zweistöckig. Mit Vorzelt.', tisch: [180, 350], teile: b.teile };
-  })(),
-  (() => { // 4: Dulle im Vorgarten, Haus dahinter
+  (() => { // 3: Dulle im Vorgarten, Haus dahinter
     const b = bau(); let y = b.zelt(205, T); y = b.decke(205, y); b.dulle(205, y);
     const ya = b.zelle(270, T); b.zelle(320, T); b.neun(295, ya, '♠');
     y = b.zelle(295, ya); b.neun(295, y, '♥');
     return { name: 'Dulle im Garten', text: 'Vorne steht die Dulle. Die bleibt bitte stehen.', tisch: [175, 350], teile: b.teile };
   })(),
-  (() => { // 5: Turm, vier Stockwerke
+  (() => { // 4: Turm, vier Stockwerke; die Dulle sitzt davor auf der Pforte (über sie hinweg werfen)
     const b = bau(); let y = T;
-    y = b.zelle(290, y); b.neun(290, y, '♦'); y = b.zelle(290, y); y = b.zelle(290, y); b.neun(290, y, '♣'); y = b.zelle(290, y);
-    b.dulle(290, y);
-    return { name: 'Der Turm', text: 'Ein Neunerturm. Ganz oben thront die Dulle.', tisch: [200, 350], teile: b.teile };
+    y = b.zelle(300, y); b.neun(300, y, '♦'); y = b.zelle(300, y); y = b.zelle(300, y); b.neun(300, y, '♣'); y = b.zelle(300, y); b.neun(300, y, '♠');
+    const yp = b.zelle(228, T); b.dulle(228, yp);
+    return { name: 'Der Turm', text: 'Ein Neunerturm. Die Dulle hält davor Wache.', tisch: [196, 352], teile: b.teile };
+  })(),
+  (() => { // 5: zwei Stockwerke mit Neuner auf dem Dach, zweiter Neuner auf dem Vorzelt
+    const b = bau(); let y = b.zelle(290, T); y = b.zelle(290, y); b.neun(290, y, '♣');
+    let yv = b.zelt(212, T); yv = b.decke(212, yv); b.neun(212, yv, '♦');
+    return { name: 'Zweistöckig', text: 'Die Neuner wohnen jetzt zweistöckig. Mit Vorzelt.', tisch: [180, 350], teile: b.teile };
   })(),
   (() => { // 6: Vereinsheim: breiter Unterbau, versetzte Stockwerke, Dulle im Vorzelt
     const b = bau();

@@ -7,7 +7,12 @@ import { card, neuntoeter, dorn, hintergrund, rr, WOOD } from '../core/draw.js';
 import { hudBar, hudLabel, hudValue, createPopups } from '../core/hud.js';
 import { clamp } from '../core/util.js';
 import { LEVELS, T, KL, KD } from './kartenhaus/level.js';
-import { createWelt, vorschau, FLOOR, FORK, KRAFT, MAXZUG } from './kartenhaus/welt.js';
+import { createWelt, vorschau, abschuss, FLOOR, FORK, MAXZUG, ZUGWEG } from './kartenhaus/welt.js';
+
+/* Kamera: die Physikwelt wird um K vergrößert gezeichnet, rechts am Tischende (AX) und unten am
+   Boden (AY) verankert. So füllen Schleuder und Häuser die Bühne; links außerhalb liegt nur Busch. */
+const CAM = { k: 1.25, ax: 358, ay: FLOOR, bx: 360, by: 612 };
+const toS = (x, y) => ({ x: (x - CAM.ax) * CAM.k + CAM.bx, y: (y - CAM.ay) * CAM.k + CAM.by });
 
 const WUERFE = 3, P_NEUN = 9, P_WURF = 15, P_DULLE = 18;
 const LINIE = T - 28;                          // Mittelpunkt eines Neuners darunter = liegt auf dem Tisch
@@ -62,8 +67,10 @@ export default {
       welt.step(dt);
       pruefe(dt);
       const b = welt.bird;
+      // langsam rollend oder liegend: Vogel richtet sich auf (statt schräg auf dem Boden zu liegen)
+      if (!b || b.speed <= 2) birdAng += (0 - Math.atan2(Math.sin(birdAng), Math.cos(birdAng))) * Math.min(1, dt * 8);
       if (phase === 'flug') {
-        if (b && b.speed > 1) birdAng = Math.atan2(b.velocity.y, b.velocity.x);
+        if (b && b.speed > 2) birdAng = Math.atan2(b.velocity.y, b.velocity.x);
         const p = b && b.position;
         const weg = !b || p.x > VW + 40 || p.x < -40 || p.y > FLOOR + 40;
         ruhT = (b && (b.isSleeping || b.speed < .3)) ? ruhT + dt : 0;
@@ -80,8 +87,9 @@ export default {
         const p = x.body.position, unten = x.weg || p.y > LINIE || p.x < -20 || p.x > VW + 20;
         if (!x.out && unten) {
           x.out = true;
-          if (x.k === 'neun') { score += P_NEUN; pops.add(clamp(p.x, 40, VW - 40), Math.min(p.y, T) - 30, `+${P_NEUN} erledigt`, C.ok); api.vibrate(25); api.sfx('neuner'); }
-          else { score -= P_DULLE; dullen++; pops.add(clamp(p.x, 40, VW - 40), Math.min(p.y, T) - 30, `Die Dulle! −${P_DULLE}`, C.bad); api.vibrate(200); api.sfx('dulle'); }
+          const q = toS(p.x, Math.min(p.y, T) - 24);
+          if (x.k === 'neun') { score += P_NEUN; pops.add(clamp(q.x, 40, VW - 40), q.y, `+${P_NEUN} erledigt`, C.ok); api.vibrate(25); api.sfx('neuner'); }
+          else { score -= P_DULLE; dullen++; pops.add(clamp(q.x, 40, VW - 40), q.y, `Die Dulle! −${P_DULLE}`, C.bad); api.vibrate(200); api.sfx('dulle'); }
         }
         if (x.out && x.k === 'neun' && !x.spiess) {
           x.outT += dt;
@@ -120,13 +128,13 @@ export default {
         if (ev.x < 170 && ev.y > HUD + 120) { zug = { id: ev.id, fx: ev.x, fy: ev.y, dx: 0, dy: 0, ton: 0 }; dots = null; }
       } else if (zug && ev.id === zug.id) {
         if (ev.type === 'move') {
-          let dx = ev.x - zug.fx, dy = ev.y - zug.fy; const l = Math.hypot(dx, dy);
+          let dx = (ev.x - zug.fx) / CAM.k, dy = (ev.y - zug.fy) / CAM.k; const l = Math.hypot(dx, dy);   // Fingerweg -> Welt
           if (l > MAXZUG) { dx *= MAXZUG / l; dy *= MAXZUG / l; }
           zug.dx = dx; zug.dy = dy;
-          dots = l > 12 ? vorschau(FORK.x + dx, FORK.y + dy, -dx * KRAFT, -dy * KRAFT) : null;
+          if (l > 12) { const v = abschuss(dx, dy); dots = vorschau(FORK.x + dx * ZUGWEG, FORK.y + dy * ZUGWEG, v.vx, v.vy); } else dots = null;
           const lz = Math.min(l, MAXZUG); if (Math.abs(lz - zug.ton) > 6) { zug.ton = lz; api.sfx('spannen', { amount: lz / MAXZUG }); }
         } else if (ev.type === 'up' && Math.hypot(zug.dx, zug.dy) > 12) {
-          welt.wirf(FORK.x + zug.dx, FORK.y + zug.dy, -zug.dx * KRAFT, -zug.dy * KRAFT);
+          const v = abschuss(zug.dx, zug.dy); welt.wirf(FORK.x + zug.dx * ZUGWEG, FORK.y + zug.dy * ZUGWEG, v.vx, v.vy);
           birdAng = Math.atan2(-zug.dy, -zug.dx);
           wuerfe--; phase = 'flug'; pt = 0; ruhT = 0; zug = null; dots = null; api.vibrate(15); api.sfx('schleudern');
         } else { zug = null; dots = null; }
@@ -154,14 +162,16 @@ export default {
       // Linie: Neuner darunter = erledigt
       ctx.strokeStyle = C.bad; ctx.globalAlpha = .55; ctx.lineWidth = 1.5; ctx.setLineDash([6, 5]);
       ctx.beginPath(); ctx.moveTo(x0 - 6, T - 1); ctx.lineTo(VW, T - 1); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
-      ctx.fillStyle = C.muted; ctx.font = `600 9px ${MONO}`; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-      ctx.fillText('NEUNER AUF DEM TISCH', (x0 + x1) / 2, T + 32); ctx.fillText('= ERLEDIGT', (x0 + x1) / 2, T + 43);
+      // Erklärung zwischen den Tischbeinen (10 px Welt = 12,5 px auf der Bühne)
+      const mx = (x0 + x1) / 2;
+      ctx.fillStyle = C.ink; ctx.globalAlpha = .8; ctx.font = `600 10px ${MONO}`; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+      ctx.fillText('NEUNER AUF', mx, T + 34); ctx.fillText('DEM TISCH', mx, T + 47); ctx.fillText('= ERLEDIGT', mx, T + 60); ctx.globalAlpha = 1;
       ctx.restore();
     }
-    const slot = i => ({ x: 14 + (i % 7) * 15, y: 588 - (i % 7) * 4 - (i / 7 | 0) * 8, r: (i % 2 ? .3 : -.3) });
+    const slot = i => ({ x: FORK.x - 40 + (i % 7) * 13, y: 592 - (i % 7) * 3.2 - (i / 7 | 0) * 8, r: (i % 2 ? .3 : -.3) });
     function busch(ctx) {
       ctx.save();
-      ctx.fillStyle = C.thorn; ctx.globalAlpha = .25; ctx.beginPath(); ctx.ellipse(55, FLOOR + 6, 95, 46, 0, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
+      ctx.fillStyle = C.thorn; ctx.globalAlpha = .25; ctx.beginPath(); ctx.ellipse(FORK.x - 30, FLOOR + 6, 95, 40, 0, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
       // Astgabel
       ctx.strokeStyle = WOOD; ctx.lineCap = 'round'; ctx.lineWidth = 9;
       ctx.beginPath(); ctx.moveTo(FORK.x + 4, FLOOR); ctx.quadraticCurveTo(FORK.x - 2, 540, FORK.x, 515); ctx.stroke();
@@ -169,20 +179,49 @@ export default {
       ctx.beginPath(); ctx.moveTo(FORK.x, 517); ctx.quadraticCurveTo(FORK.x + 16, 500, FORK.x + 13, FORK.y - 12); ctx.stroke();
       dorn(ctx, FORK.x - 3, 548, 14, -1.2, 5); dorn(ctx, FORK.x + 4, 532, 13, 1.1, 5); dorn(ctx, FORK.x - 10, 497, 11, -.9, 4); dorn(ctx, FORK.x + 10, 495, 11, .9, 4);
       // Ast mit Dornen für die erlegten Neuner
-      ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(0, 600); ctx.quadraticCurveTo(60, 592, 118, 568); ctx.stroke();
+      ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(FORK.x - 66, 600); ctx.quadraticCurveTo(FORK.x - 10, 592, FORK.x + 38, 572); ctx.stroke();
       for (let i = 0; i < 7; i++) { const s = slot(i); dorn(ctx, s.x, s.y + 8, 15, s.r, 5); }
       ctx.restore();
     }
+    /* Gummi: beide Stränge von den Gabelenden zum Rücken des Vogels (hinter ihm gezeichnet) */
     function gummi(ctx, bx, by) {
-      ctx.save(); ctx.strokeStyle = '#3b2416'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
-      ctx.beginPath(); ctx.moveTo(FORK.x - 14, FORK.y - 10); ctx.lineTo(bx, by); ctx.lineTo(FORK.x + 13, FORK.y - 12); ctx.stroke(); ctx.restore();
+      ctx.save(); ctx.strokeStyle = '#3b2416'; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      ctx.beginPath(); ctx.moveTo(FORK.x - 14, FORK.y - 10); ctx.lineTo(bx, by); ctx.lineTo(FORK.x + 13, FORK.y - 12); ctx.stroke();
+      ctx.fillStyle = '#3b2416'; ctx.beginPath(); ctx.arc(bx, by, 3.2, 0, Math.PI * 2); ctx.fill();   // Lederschlaufe
+      ctx.restore();
     }
+    const VSCALE = .66;   // Vogel-Größe (Trefferkreis BIRD_R = 13)
     function vogel(ctx, x, y, ang, o = {}) {
       ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
-      neuntoeter(ctx, 0, 0, { facing: 1, scale: .5, ...o }); ctx.restore();
+      neuntoeter(ctx, 0, 0, { facing: 1, scale: VSCALE, ...o }); ctx.restore();
+    }
+    /* Text in Zeilen umbrechen, die höchstens maxW breit sind */
+    function zeilen(ctx, s, maxW, font) {
+      ctx.save(); ctx.font = font; const out = []; let cur = '';
+      for (const w of s.split(' ')) { const n = cur ? cur + ' ' + w : w; if (cur && ctx.measureText(n).width > maxW) { out.push(cur); cur = w; } else cur = n; }
+      if (cur) out.push(cur); ctx.restore(); return out;
+    }
+    /* Erster Wurf: gut lesbarer Hinweis über der Gabel mit Zug-Pfeil */
+    function hinweis(ctx) {
+      const F = toS(FORK.x, FORK.y), y = F.y - 96, a = .8 + .2 * Math.sin(t * 4);
+      ctx.save(); ctx.globalAlpha = a;
+      ctx.font = `700 15px ${BODY}`; const w = ctx.measureText('Vogel zurückziehen, loslassen').width + 24;
+      rr(ctx, 10, y - 18, w, 30, 15); ctx.fillStyle = C.bg; ctx.fill(); ctx.strokeStyle = C.ch; ctx.lineWidth = 1.5; ctx.stroke();
+      text(ctx, 'Vogel zurückziehen, loslassen', 10 + w / 2, y + 2, `700 15px ${BODY}`, C.ink);
+      // Pfeil: von der Gabel nach links unten (Zugrichtung), wandert mit
+      const p = (t * .8) % 1, ax = F.x - 22 - p * 34, ay = F.y + 18 + p * 20;
+      ctx.globalAlpha = a * (1 - p * .6); ctx.strokeStyle = C.ch; ctx.lineWidth = 3; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(F.x - 22, F.y + 18); ctx.lineTo(ax, ay); ctx.stroke();
+      const ux = -34, uy = 20, l = Math.hypot(ux, uy), nx = ux / l, ny = uy / l;
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ax - nx * 8 + ny * 6, ay - ny * 8 - nx * 6); ctx.moveTo(ax, ay); ctx.lineTo(ax - nx * 8 - ny * 6, ay - ny * 8 + nx * 6); ctx.stroke();
+      ctx.restore();
     }
     function hud(ctx) {
       hudBar(ctx);
+      if (phase === 'wahl') {   // Hausauswahl: noch kein Haus gewählt
+        hudLabel(ctx, 12, 'PUNKTE'); hudLabel(ctx, 100, 'HAUS'); hudValue(ctx, 12, score, C.ch); hudValue(ctx, 100, '–', C.muted);
+        return;
+      }
       hudLabel(ctx, 12, 'PUNKTE'); hudLabel(ctx, 100, 'HAUS'); hudLabel(ctx, 168, 'NEUNER'); hudLabel(ctx, 258, 'WÜRFE');
       hudValue(ctx, 12, score, C.ch); hudValue(ctx, 100, `${lvl + 1}/${LEVELS.length}`);
       const n = neuner().length; hudValue(ctx, 168, `${n - offen()}/${n}`, offen() === 0 ? C.ok : C.ink);
@@ -207,7 +246,8 @@ export default {
 
     function draw(ctx) {
       hintergrund(ctx, t);
-      ctx.save(); ctx.fillStyle = C.line; ctx.fillRect(0, FLOOR, VW, VH - FLOOR); ctx.fillStyle = C.muted; ctx.globalAlpha = .5; ctx.fillRect(0, FLOOR, VW, 2); ctx.restore();
+      ctx.save(); ctx.fillStyle = C.line; ctx.fillRect(0, CAM.by, VW, VH - CAM.by); ctx.fillStyle = C.muted; ctx.globalAlpha = .5; ctx.fillRect(0, CAM.by, VW, 2); ctx.restore();
+      ctx.save(); ctx.translate(CAM.bx - CAM.ax * CAM.k, CAM.by - CAM.ay * CAM.k); ctx.scale(CAM.k, CAM.k);   // Kamera: Welt
       tisch(ctx);
       busch(ctx);
       spiked.forEach((s, i) => { const p = slot(i); card(ctx, p.x, p.y, p.r, '9', s, .45); });
@@ -224,24 +264,26 @@ export default {
       // Vogel: in der Gabel (mit Gummi), im Flug, oder wartend
       const b = welt.bird;
       if (phase === 'bereit') {
-        const bx = FORK.x + (zug ? zug.dx : 0), by = FORK.y + (zug ? zug.dy : 0);
+        const bx = FORK.x + (zug ? zug.dx * ZUGWEG : 0), by = FORK.y + (zug ? zug.dy * ZUGWEG : 0);
         if (dots) { ctx.save(); ctx.fillStyle = C.ch; dots.forEach((d, i) => { ctx.globalAlpha = .85 - i * .06; ctx.beginPath(); ctx.arc(d.x, d.y, 3.2 - i * .15, 0, Math.PI * 2); ctx.fill(); }); ctx.restore(); }
-        vogel(ctx, bx, by, zug ? Math.atan2(-zug.dy, -zug.dx) * .6 : 0);
-        gummi(ctx, bx - (zug ? 6 * zug.dx / (Math.hypot(zug.dx, zug.dy) || 1) : 0), by + 2);
+        const ang = zug && Math.hypot(zug.dx, zug.dy) > 4 ? Math.atan2(-zug.dy, -zug.dx) * .6 : 0;
+        gummi(ctx, bx - Math.cos(ang) * 15, by - Math.sin(ang) * 15 + 2);   // Schlaufe am Rücken
+        vogel(ctx, bx, by, ang);
       } else {
         gummi(ctx, FORK.x, FORK.y - 4);
         if (b) vogel(ctx, b.position.x, b.position.y, birdAng, { wing: phase === 'flug' && b.speed > 2 ? Math.sin(t * 22) : 0 });
       }
+      ctx.restore();   // Kamera Ende: ab hier Bühnenkoordinaten
       pops.draw(ctx);
       if (banner > 0 && phase !== 'wahl') {
         ctx.save(); ctx.globalAlpha = clamp(banner, 0, 1);
         text(ctx, `Haus ${lvl + 1}: ${LEVELS[lvl].name}`, VW / 2, HUD + 40, `800 30px ${GOT}`, C.ch);
-        text(ctx, LEVELS[lvl].text, VW / 2, HUD + 64, `400 16px ${BODY}`, C.muted);
+        zeilen(ctx, LEVELS[lvl].text, VW - 40, `400 16px ${BODY}`).forEach((z, i) => text(ctx, z, VW / 2, HUD + 64 + i * 19, `400 16px ${BODY}`, C.muted));
         ctx.restore();
       }
-      if (phase === 'bereit' && pt < 6 && !zug && wuerfe === WUERFE && lvl === 0) {
-        ctx.save(); ctx.globalAlpha = .5 + .5 * Math.sin(t * 4);
-        text(ctx, 'Vogel zurückziehen, loslassen', 12, FORK.y - 44, `600 12px ${MONO}`, C.muted, 'left'); ctx.restore();
+      if (phase === 'bereit' && !zug && wuerfe === WUERFE && lvl === 0) hinweis(ctx);
+      else if (banner <= 0 && phase !== 'wahl') {   // danach bleibt der Hausname klein oben stehen
+        text(ctx, `HAUS ${lvl + 1} · ${LEVELS[lvl].name.toUpperCase()}`, VW / 2, HUD + 26, `600 11px ${MONO}`, C.muted);
       }
       if (phase === 'fertig' && bilanz && lvl < LEVELS.length - 1) {
         fenster(ctx, 170, 290);
